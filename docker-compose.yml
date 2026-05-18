@@ -1,0 +1,80 @@
+version: '3.8'
+
+services:
+  # 1. API Server (Node.js)
+  api:
+    build: 
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: documind-api
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=production
+      - REDIS_URL=redis://redis:6379
+      - SUPABASE_URL=${VITE_SUPABASE_URL}
+      - SUPABASE_SERVICE_KEY=${SUPABASE_SERVICE_KEY}
+      - OPENROUTER_API_KEY=${OPENROUTER_API_KEY}
+      - OLLAMA_HOST=http://ollama:11434
+    depends_on:
+      redis:
+        condition: service_healthy
+
+  # 2. Background Worker (BullMQ + Redis)
+  worker:
+    build: 
+      context: ./backend
+      dockerfile: Dockerfile
+    command: npm run start:worker
+    container_name: documind-worker
+    restart: unless-stopped
+    environment:
+      - NODE_ENV=production
+      - REDIS_URL=redis://redis:6379
+      - SUPABASE_URL=${VITE_SUPABASE_URL}
+      - SUPABASE_SERVICE_KEY=${SUPABASE_SERVICE_KEY}
+      - OPENROUTER_API_KEY=${OPENROUTER_API_KEY}
+      - OLLAMA_HOST=http://ollama:11434
+    depends_on:
+      redis:
+        condition: service_healthy
+    deploy:
+      replicas: 2 # Scale workers as needed
+
+  # 3. Redis (Message Queue & Caching)
+  redis:
+    image: redis:7-alpine
+    container_name: documind-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  # 4. Ollama (Local AI Engine)
+  ollama:
+    image: ollama/ollama:latest
+    container_name: documind-ollama
+    restart: unless-stopped
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_data:/root/.ollama
+    # If your VPS has GPU, uncomment below:
+    # deploy:
+    #   resources:
+    #     reservations:
+    #       devices:
+    #         - driver: nvidia
+    #           count: 1
+    #           capabilities: [gpu]
+
+volumes:
+  redis_data:
+  ollama_data:
