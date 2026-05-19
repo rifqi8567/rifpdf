@@ -33,7 +33,7 @@ export async function summarizeDocument(documentId: string, model?: AIModel): Pr
       ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {})
     },
     body: JSON.stringify({
-      model: model || 'google/gemini-2.0-flash-exp',
+      model: model || 'ollama/auto',
     }),
   });
 
@@ -70,12 +70,13 @@ export async function streamChatMessage(
     body: JSON.stringify({
       documentId: request.documentContext, // Mapping to your backend
       messages: request.messages,
-      model: request.model || 'google/gemini-2.0-flash-exp',
+      model: request.model || 'ollama/auto',
     }),
   });
 
   if (!response.ok) {
-    throw new Error('Failed to get AI response');
+    const payload = await response.json().catch(() => null);
+    throw new Error(payload?.error || payload?.details || `Gagal menghubungi AI server (${response.status})`);
   }
 
   const reader = response.body?.getReader();
@@ -83,18 +84,23 @@ export async function streamChatMessage(
 
   if (!reader) return;
 
+  let sseBuffer = '';
+
   while (true) {
     const { done, value } = await reader.read();
     if (done) break;
     
-    // OpenRouter SSE format returns "data: {...}" strings.
-    const chunkString = decoder.decode(value, { stream: true });
+    sseBuffer += decoder.decode(value, { stream: true });
+    const events = sseBuffer.split('\n\n');
+    sseBuffer = events.pop() || '';
     
-    // Parse SSE lines
-    const lines = chunkString.split('\n').filter(line => line.trim() !== '');
-    for (const line of lines) {
-      if (line.startsWith('data: ')) {
-        const data = line.slice(6);
+    for (const event of events) {
+      const dataLines = event
+        .split('\n')
+        .filter((line) => line.startsWith('data: '))
+        .map((line) => line.slice(6));
+
+      for (const data of dataLines) {
         if (data === '[DONE]') continue;
         
         try {
@@ -106,6 +112,19 @@ export async function streamChatMessage(
         } catch (e) {
           console.warn('Error parsing JSON from SSE', e);
         }
+      }
+    }
+  }
+
+  if (sseBuffer.trim().startsWith('data: ')) {
+    const data = sseBuffer.trim().slice(6);
+    if (data !== '[DONE]') {
+      try {
+        const parsed = JSON.parse(data);
+        const content = parsed.choices?.[0]?.delta?.content || '';
+        if (content) onChunk(content);
+      } catch (e) {
+        console.warn('Error parsing final JSON from SSE', e);
       }
     }
   }

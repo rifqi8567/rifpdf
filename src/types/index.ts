@@ -56,6 +56,7 @@ export interface ChatSession {
 }
 
 export type AIModel =
+  | 'ollama/auto'
   | 'google/gemini-2.0-flash-exp'
   | 'anthropic/claude-3.5-sonnet'
   | 'deepseek/deepseek-chat'

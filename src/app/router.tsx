@@ -12,6 +12,7 @@ const DocumentsPage = lazy(() => import('@/pages/dashboard/documents'));
 const SettingsPage = lazy(() => import('@/pages/dashboard/settings'));
 const ToolPage = lazy(() => import('@/pages/dashboard/tools'));
 const ToolPreviewPage = lazy(() => import('@/pages/dashboard/tool-preview'));
+const ConvertDevelopmentPage = lazy(() => import('@/pages/dashboard/convert-development'));
 const HelpPage = lazy(() => import('@/pages/dashboard/help'));
 
 // Loading fallback
@@ -92,6 +93,16 @@ const router = createBrowserRouter([
         element: (
           <Suspense fallback={<PageLoader />}>
             <SettingsPage />
+          </Suspense>
+        ),
+      },
+      {
+        // Convert lama sementara tidak dipakai. Route ini sengaja diarahkan ke
+        // halaman status pengembangan sampai fitur konversi siap dirilis.
+        path: 'tools/convert',
+        element: (
+          <Suspense fallback={<PageLoader />}>
+            <ConvertDevelopmentPage />
           </Suspense>
         ),
       },

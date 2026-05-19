@@ -6,14 +6,71 @@ import { env } from '../config/env';
 
 const router = Router();
 
+const isOllamaModel = (model: string) => model === 'ollama/auto' || model.startsWith('ollama/');
+
+const resolveOllamaModel = (model: string) => {
+  if (model === 'ollama/auto') return env.OLLAMA_CHAT_MODEL;
+  return model.replace(/^ollama\//, '');
+};
+
+async function generateWithOpenRouter(model: string, messages: { role: string; content: string }[]) {
+  if (!env.OPENROUTER_API_KEY) {
+    throw new Error('OPENROUTER_API_KEY is not configured');
+  }
+
+  const aiResponse = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${env.OPENROUTER_API_KEY}`,
+      'Content-Type': 'application/json',
+      'HTTP-Referer': env.OPENROUTER_REFERER || process.env.FRONTEND_URL || 'http://localhost:5173',
+      'X-Title': 'DocuMind AI',
+    },
+    body: JSON.stringify({
+      model,
+      messages,
+      temperature: 0.2,
+      max_tokens: 900,
+    }),
+  });
+
+  if (!aiResponse.ok) {
+    const errorText = await aiResponse.text();
+    throw new Error(`OpenRouter failed (${aiResponse.status}): ${errorText}`);
+  }
+
+  const payload = await aiResponse.json() as any;
+  return payload.choices?.[0]?.message?.content as string | undefined;
+}
+
+async function generateWithOllama(model: string, messages: { role: string; content: string }[]) {
+  const aiResponse = await fetch(`${env.OLLAMA_HOST}/api/chat`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      model: resolveOllamaModel(model),
+      messages,
+      stream: false,
+      options: {
+        temperature: 0.2,
+        num_ctx: 8192,
+      },
+    }),
+  });
+
+  if (!aiResponse.ok) {
+    const errorText = await aiResponse.text();
+    throw new Error(`Ollama failed (${aiResponse.status}): ${errorText}`);
+  }
+
+  const payload = await aiResponse.json() as any;
+  return payload.message?.content || payload.response;
+}
+
 router.post('/documents/:documentId/summary', requireAuth, async (req: Request, res: Response) => {
   const { documentId } = req.params;
-  const { model = 'google/gemini-2.0-flash-exp' } = req.body;
+  const { model = env.AI_PROVIDER === 'ollama' ? 'ollama/auto' : 'google/gemini-2.0-flash-exp' } = req.body;
   const userId = req.user!.id;
-
-  if (!env.OPENROUTER_API_KEY) {
-    return res.status(503).json({ error: 'AI provider is not configured' });
-  }
 
   const { data: document, error: documentError } = await supabaseAdmin
     .from('documents')
@@ -49,24 +106,14 @@ router.post('/documents/:documentId/summary', requireAuth, async (req: Request, 
     return res.status(422).json({ error: 'Document has no extracted text yet' });
   }
 
-  const aiResponse = await fetch('https://openrouter.ai/api/v1/chat/completions', {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${env.OPENROUTER_API_KEY}`,
-      'Content-Type': 'application/json',
-      'HTTP-Referer': process.env.FRONTEND_URL || 'https://documind.ai',
-      'X-Title': 'DocuMind AI',
+  const messages = [
+    {
+      role: 'system',
+      content: 'You summarize documents accurately. Use Indonesian by default. Do not invent facts not present in the context.',
     },
-    body: JSON.stringify({
-      model,
-      messages: [
-        {
-          role: 'system',
-          content: 'You summarize documents accurately. Use Indonesian by default. Do not invent facts not present in the context.',
-        },
-        {
-          role: 'user',
-          content: `Ringkas dokumen "${document.name}" berdasarkan konteks berikut. Berikan:
+    {
+      role: 'user',
+      content: `Ringkas dokumen "${document.name}" berdasarkan konteks berikut. Berikan:
 1. Ringkasan eksekutif 3-5 kalimat
 2. 5 poin utama
 3. Risiko atau hal yang perlu diperhatikan
@@ -74,20 +121,12 @@ router.post('/documents/:documentId/summary', requireAuth, async (req: Request, 
 
 Konteks:
 ${context}`,
-        },
-      ],
-      temperature: 0.2,
-      max_tokens: 900,
-    }),
-  });
+    },
+  ];
 
-  if (!aiResponse.ok) {
-    const errorText = await aiResponse.text();
-    return res.status(502).json({ error: 'Failed to summarize document', details: errorText });
-  }
-
-  const payload = await aiResponse.json() as any;
-  const summary = payload.choices?.[0]?.message?.content;
+  const summary = isOllamaModel(model)
+    ? await generateWithOllama(model, messages)
+    : await generateWithOpenRouter(model, messages);
 
   if (!summary) {
     return res.status(502).json({ error: 'AI provider returned an empty summary' });

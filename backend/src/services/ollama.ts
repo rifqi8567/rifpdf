@@ -11,7 +11,7 @@ export class OllamaService {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          model: 'nomic-embed-text',
+          model: env.OLLAMA_EMBED_MODEL,
           prompt: text,
         }),
       });

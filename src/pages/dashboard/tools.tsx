@@ -1,5 +1,6 @@
 import { useParams, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
+import type { PDFPageProxy } from 'pdfjs-dist/types/src/display/api';
 import {
   Merge,
   Scissors,
@@ -35,6 +36,7 @@ import JSZip from 'jszip';
 import initQpdf from 'qpdf-wasm';
 import qpdfJsUrl from 'qpdf-wasm/qpdf.js?url';
 import qpdfWasmUrl from 'qpdf-wasm/qpdf.wasm?url';
+import { createWorker, PSM } from 'tesseract.js';
 import { supabase } from '@/lib/supabase';
 import { useAuthStore } from '@/store/auth-store';
 import { toast } from 'sonner';
@@ -272,6 +274,15 @@ interface SignaturePlacement {
   yRatio: number;
 }
 
+interface OcrPageResult {
+  label: string;
+  text: string;
+  source: 'text-layer' | 'ocr';
+  confidence?: number;
+}
+
+type OcrWorker = Awaited<ReturnType<typeof createWorker>>;
+
 type QpdfModule = {
   FS: {
     writeFile: (path: string, data: Uint8Array) => void;
@@ -346,6 +357,7 @@ export default function ToolPage() {
   // OCR Output State
   const [ocrText, setOcrText] = useState('');
   const [isOcrMode, setIsOcrMode] = useState(false);
+  const [ocrSummary, setOcrSummary] = useState('');
 
   // Conversion Mode State
   const [conversionType, setConversionType] = useState<'word-to-pdf' | 'excel-to-pdf' | 'ppt-to-pdf' | 'pdf-to-word'>('word-to-pdf');
@@ -361,6 +373,7 @@ export default function ToolPage() {
     setShowSuccessModal(false);
     setOcrText('');
     setIsOcrMode(false);
+    setOcrSummary('');
     setHasSignature(false);
     setSignatureColor('#111111');
     setSignatureStrokeWidth(3);
@@ -940,6 +953,97 @@ export default function ToolPage() {
 
   // --- 6. OCR SCANNER ---
   const processOcr = async () => {
+    setProcessingMessage('Menyiapkan OCR Indonesia + Inggris...');
+    setOcrText('');
+    setOcrSummary('');
+
+    let worker: OcrWorker | null = null;
+    const pageResults: OcrPageResult[] = [];
+
+    const getWorker = async () => {
+      if (worker) return worker;
+
+      try {
+        worker = await createWorker(['ind', 'eng'], 1, {
+          logger: (message) => {
+            if (message.status === 'recognizing text') {
+              setProcessingMessage(`Membaca teks OCR ${Math.round(message.progress * 100)}%...`);
+            } else if (message.status) {
+              setProcessingMessage(`Menyiapkan OCR: ${message.status}`);
+            }
+          },
+        });
+      } catch (error) {
+        console.warn('Indonesian OCR data unavailable, falling back to English:', error);
+        worker = await createWorker('eng', 1, {
+          logger: (message) => {
+            if (message.status === 'recognizing text') {
+              setProcessingMessage(`Membaca teks OCR ${Math.round(message.progress * 100)}%...`);
+            }
+          },
+        });
+      }
+
+      await worker.setParameters({
+        tessedit_pageseg_mode: PSM.AUTO,
+        preserve_interword_spaces: '1',
+        user_defined_dpi: '300',
+      });
+
+      return worker;
+    };
+
+    try {
+      for (let fileIndex = 0; fileIndex < files.length; fileIndex++) {
+        const file = files[fileIndex];
+        setProcessingMessage(`Menganalisis ${file.name} (${fileIndex + 1}/${files.length})...`);
+
+        if (file.type === 'application/pdf') {
+          const results = await extractOcrFromPdf(file, getWorker);
+          pageResults.push(...results);
+        } else if (file.type.startsWith('image/')) {
+          const activeWorker = await getWorker();
+          const canvas = await prepareImageForOcr(file);
+          const { data } = await activeWorker.recognize(canvas);
+          pageResults.push({
+            label: file.name,
+            text: normalizeOcrText(data.text),
+            source: 'ocr',
+            confidence: data.confidence,
+          });
+          canvas.width = 0;
+          canvas.height = 0;
+        } else {
+          pageResults.push({
+            label: file.name,
+            text: 'Format file belum didukung OCR. Gunakan PDF, JPG, PNG, atau WebP.',
+            source: 'ocr',
+          });
+        }
+      }
+
+      const ocrPages = pageResults.filter((page) => page.source === 'ocr');
+      const textLayerPages = pageResults.filter((page) => page.source === 'text-layer');
+      const avgConfidence = averageConfidence(ocrPages);
+
+      setOcrText(buildOcrOutput(pageResults));
+      setOcrSummary(
+        [
+          `${pageResults.length} bagian diproses`,
+          textLayerPages.length > 0 ? `${textLayerPages.length} dari text layer PDF` : '',
+          ocrPages.length > 0 ? `${ocrPages.length} dengan OCR scan` : '',
+          avgConfidence !== null ? `akurasi OCR rata-rata ${avgConfidence}%` : '',
+        ].filter(Boolean).join(' - ')
+      );
+      setIsOcrMode(true);
+      toast.success('Pemindaian OCR selesai!');
+    } finally {
+      const activeWorker = worker as OcrWorker | null;
+      await activeWorker?.terminate();
+      setIsProcessing(false);
+    }
+    return;
+
     setProcessingMessage('AI sedang memindai dan membaca teks...');
     await new Promise(resolve => setTimeout(resolve, 3000));
     
@@ -960,6 +1064,328 @@ export default function ToolPage() {
     setIsOcrMode(true);
     setIsProcessing(false);
     toast.success('Pemindaian OCR selesai!');
+  };
+
+  const extractOcrFromPdf = async (
+    file: File,
+    getWorker: () => Promise<OcrWorker>
+  ): Promise<OcrPageResult[]> => {
+    const arrayBuffer = await file.arrayBuffer();
+    const loadingTask = pdfjs.getDocument({ data: arrayBuffer.slice(0) });
+    const pdf = await loadingTask.promise;
+    const results: OcrPageResult[] = [];
+
+    try {
+      for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
+        setProcessingMessage(`Membaca halaman PDF ${pageNum}/${pdf.numPages}...`);
+        const page = await pdf.getPage(pageNum);
+        const textContent = await page.getTextContent();
+        const textLayerText = normalizeOcrText(
+          (textContent.items as Array<{ str?: string }>)
+            .map((item) => item.str || '')
+            .join(' ')
+        );
+
+        if (textLayerText.length >= 24) {
+          results.push({
+            label: `${file.name} - Halaman ${pageNum}`,
+            text: textLayerText,
+            source: 'text-layer',
+          });
+          page.cleanup();
+          continue;
+        }
+
+        const activeWorker = await getWorker();
+        const canvas = await renderPdfPageForOcr(page);
+        setProcessingMessage(`OCR scan halaman ${pageNum}/${pdf.numPages}...`);
+        const { data } = await activeWorker.recognize(canvas);
+        results.push({
+          label: `${file.name} - Halaman ${pageNum}`,
+          text: normalizeOcrText(data.text),
+          source: 'ocr',
+          confidence: data.confidence,
+        });
+
+        page.cleanup();
+        canvas.width = 0;
+        canvas.height = 0;
+      }
+    } finally {
+      loadingTask.destroy();
+    }
+
+    return results;
+  };
+
+  const renderPdfPageForOcr = async (page: PDFPageProxy) => {
+    const viewport = page.getViewport({ scale: 2.4 });
+    const canvas = document.createElement('canvas');
+    const context = canvas.getContext('2d', { willReadFrequently: true });
+
+    if (!context) {
+      throw new Error('Canvas browser tidak tersedia.');
+    }
+
+    canvas.width = Math.ceil(viewport.width);
+    canvas.height = Math.ceil(viewport.height);
+    context.fillStyle = '#ffffff';
+    context.fillRect(0, 0, canvas.width, canvas.height);
+    await page.render({ canvas, canvasContext: context, viewport }).promise;
+    enhanceCanvasForOcr(canvas);
+
+    return canvas;
+  };
+
+  const prepareImageForOcr = async (file: File) => {
+    const bitmap = await createImageBitmap(file);
+    const maxWidth = 2600;
+    const upscale = bitmap.width < 1200 ? 2 : 1;
+    const scale = Math.min(upscale, maxWidth / bitmap.width);
+    const canvas = document.createElement('canvas');
+    const context = canvas.getContext('2d', { willReadFrequently: true });
+
+    if (!context) {
+      bitmap.close();
+      throw new Error('Canvas browser tidak tersedia.');
+    }
+
+    canvas.width = Math.max(1, Math.round(bitmap.width * scale));
+    canvas.height = Math.max(1, Math.round(bitmap.height * scale));
+    context.fillStyle = '#ffffff';
+    context.fillRect(0, 0, canvas.width, canvas.height);
+    context.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+    bitmap.close();
+
+    enhanceCanvasForOcr(canvas);
+    return canvas;
+  };
+
+  const enhanceCanvasForOcr = (canvas: HTMLCanvasElement) => {
+    const context = canvas.getContext('2d', { willReadFrequently: true });
+    if (!context) return;
+
+    const imageData = context.getImageData(0, 0, canvas.width, canvas.height);
+    const data = imageData.data;
+
+    for (let i = 0; i < data.length; i += 4) {
+      const gray = data[i] * 0.299 + data[i + 1] * 0.587 + data[i + 2] * 0.114;
+      const contrasted = Math.max(0, Math.min(255, (gray - 128) * 1.35 + 128));
+      const sharpened = contrasted > 178 ? 255 : contrasted < 68 ? 0 : contrasted;
+      data[i] = sharpened;
+      data[i + 1] = sharpened;
+      data[i + 2] = sharpened;
+      data[i + 3] = 255;
+    }
+
+    context.putImageData(imageData, 0, 0);
+  };
+
+  const normalizeOcrText = (text: string) =>
+    text
+      .replace(/\r/g, '')
+      .replace(/[ \t]+\n/g, '\n')
+      .replace(/\n{3,}/g, '\n\n')
+      .trim();
+
+  const averageConfidence = (pages: OcrPageResult[]) => {
+    const confidences = pages
+      .map((page) => page.confidence)
+      .filter((confidence): confidence is number => typeof confidence === 'number' && Number.isFinite(confidence));
+
+    if (confidences.length === 0) return null;
+
+    return Math.round(confidences.reduce((sum, value) => sum + value, 0) / confidences.length);
+  };
+
+  const splitOcrLines = (text: string) =>
+    normalizeOcrText(text)
+      .split('\n')
+      .map((line) => line.replace(/^[\-*•\d.)\s]+/, '').replace(/\s{2,}/g, ' ').trim())
+      .filter((line) => line.length > 0);
+
+  const splitOcrSentences = (text: string) =>
+    normalizeOcrText(text)
+      .replace(/\n+/g, ' ')
+      .split(/(?<=[.!?])\s+|;\s+/)
+      .map((sentence) => sentence.replace(/\s{2,}/g, ' ').trim())
+      .filter((sentence) => sentence.length > 12);
+
+  const isLikelyHeading = (line: string) => {
+    const cleanLine = line.replace(/[:\-–—]/g, '').trim();
+    if (cleanLine.length < 3 || cleanLine.length > 64) return false;
+
+    const letters = cleanLine.replace(/[^a-zA-Z]/g, '');
+    const upperLetters = cleanLine.replace(/[^A-Z]/g, '');
+    const upperRatio = letters.length > 0 ? upperLetters.length / letters.length : 0;
+
+    return line.endsWith(':') || upperRatio > 0.72;
+  };
+
+  const isActionLine = (line: string) => {
+    const lower = line.toLowerCase();
+    return [
+      'harus',
+      'perlu',
+      'wajib',
+      'segera',
+      'deadline',
+      'tenggat',
+      'tugas',
+      'todo',
+      'to do',
+      'kirim',
+      'submit',
+      'upload',
+      'bayar',
+      'hubungi',
+      'review',
+      'revisi',
+      'lengkapi',
+      'tanda tangan',
+      'follow up',
+    ].some((keyword) => lower.includes(keyword));
+  };
+
+  const getKeyPoints = (pages: OcrPageResult[]) => {
+    const seen = new Set<string>();
+    const points: string[] = [];
+    const candidates = pages.flatMap((page) => splitOcrLines(page.text));
+
+    for (const line of candidates) {
+      const normalized = line.toLowerCase();
+      const looksImportant =
+        line.includes(':') ||
+        /\b\d{1,2}[/-]\d{1,2}[/-]\d{2,4}\b/.test(line) ||
+        /\b(rp|idr|usd)\b/i.test(line) ||
+        /\b(nama|tanggal|nomor|no\.|alamat|email|telepon|total|judul|perihal)\b/i.test(line) ||
+        (line.length >= 36 && line.length <= 160);
+
+      if (!looksImportant || seen.has(normalized)) continue;
+
+      seen.add(normalized);
+      points.push(line);
+      if (points.length >= 10) break;
+    }
+
+    return points;
+  };
+
+  const getActionItems = (pages: OcrPageResult[]) => {
+    const seen = new Set<string>();
+    const actions: string[] = [];
+
+    for (const sentence of pages.flatMap((page) => splitOcrSentences(page.text))) {
+      const normalized = sentence.toLowerCase();
+      if (!isActionLine(sentence) || seen.has(normalized)) continue;
+
+      seen.add(normalized);
+      actions.push(sentence);
+      if (actions.length >= 8) break;
+    }
+
+    return actions;
+  };
+
+  const formatPageText = (text: string) => {
+    const lines = splitOcrLines(text);
+    if (lines.length === 0) return '- Tidak ada teks terbaca pada bagian ini.';
+
+    const formatted: string[] = [];
+    let bulletCount = 0;
+
+    for (const line of lines) {
+      if (isLikelyHeading(line)) {
+        if (formatted.length > 0) formatted.push('', '');
+        formatted.push(line.replace(/:$/, '').toUpperCase());
+        formatted.push('-'.repeat(Math.min(48, Math.max(12, line.length))));
+        bulletCount = 0;
+        continue;
+      }
+
+      const prefix = bulletCount < 30 ? '- ' : '  ';
+      formatted.push(`${prefix}${line}`);
+      formatted.push('');
+      bulletCount += 1;
+    }
+
+    return formatted.join('\n').replace(/\n{4,}/g, '\n\n\n').trim();
+  };
+
+  const formatSectionTitle = (title: string) => [
+    '',
+    title,
+    '='.repeat(title.length),
+    '',
+  ].join('\n');
+
+  const formatBulletList = (items: string[]) =>
+    items
+      .map((item) => `- ${item}`)
+      .join('\n\n');
+
+  const formatNumberedList = (items: string[]) =>
+    items
+      .map((item, index) => `${index + 1}. ${item}`)
+      .join('\n\n');
+
+  const formatMetaBlock = (items: string[]) =>
+    items
+      .map((item) => `  ${item}`)
+      .join('\n');
+
+  const buildOcrOutput = (pages: OcrPageResult[]) => {
+    if (pages.length === 0) {
+      return 'Tidak ada teks yang berhasil diekstrak.';
+    }
+
+    const keyPoints = getKeyPoints(pages);
+    const actionItems = getActionItems(pages);
+    const ocrPages = pages.filter((page) => page.source === 'ocr');
+    const textLayerPages = pages.filter((page) => page.source === 'text-layer');
+    const avgConfidence = averageConfidence(ocrPages);
+
+    const summary = [
+      'HASIL OCR TERSTRUKTUR',
+      '=====================',
+      formatSectionTitle('RINGKASAN DOKUMEN'),
+      formatMetaBlock([
+        `Total bagian/halaman diproses : ${pages.length}`,
+        `Dibaca dari text layer PDF    : ${textLayerPages.length}`,
+        `Dibaca dengan OCR scan        : ${ocrPages.length}`,
+        `Rata-rata akurasi OCR         : ${avgConfidence !== null ? `${avgConfidence}%` : 'tidak tersedia'}`,
+      ]),
+      formatSectionTitle('POIN PENTING'),
+      keyPoints.length > 0
+        ? formatBulletList(keyPoints)
+        : '- Belum ada poin penting yang bisa dideteksi otomatis.\n\n- Cek detail ekstraksi di bagian bawah untuk review manual.',
+      formatSectionTitle('TO-DO / TINDAK LANJUT'),
+      actionItems.length > 0
+        ? formatNumberedList(actionItems)
+        : '1. Review kembali teks hasil OCR.\n\n2. Koreksi bagian yang kurang jelas atau salah terbaca.\n\n3. Salin atau unduh hasil akhir jika sudah sesuai.',
+      formatSectionTitle('DETAIL EKSTRAKSI PER HALAMAN'),
+    ].join('\n');
+
+    const details = pages
+      .map((page, index) => {
+        const confidence = typeof page.confidence === 'number'
+          ? `\nAkurasi OCR: ${Math.round(page.confidence)}%`
+          : '';
+        const method = page.source === 'text-layer' ? 'Text layer PDF' : 'OCR scan';
+        const text = formatPageText(page.text);
+
+        return [
+          `HALAMAN / BAGIAN ${index + 1}`,
+          '-'.repeat(18 + String(index + 1).length),
+          `Nama    : ${page.label}`,
+          `Metode  : ${method}${confidence ? confidence.replace('\n', '\n') : ''}`,
+          '',
+          text,
+        ].join('\n');
+      })
+      .join('\n\n\n');
+
+    return `${summary}\n\n${details}`;
   };
 
   // --- 7. ROTATE PDF ---
@@ -1360,8 +1786,10 @@ ${realContent}
   // Helper values for dynamic Upload Zone config
   const isImageToPdf = toolId === 'image-to-pdf';
   const isConvert = toolId === 'convert';
+  const isOcr = toolId === 'ocr';
 
   const getAcceptedTypes = () => {
+    if (isOcr) return ['application/pdf', 'image/png', 'image/jpeg', 'image/jpg', 'image/webp'];
     if (isImageToPdf) return ['image/png', 'image/jpeg', 'image/jpg'];
     if (isConvert) {
       if (conversionType === 'word-to-pdf') return ['application/vnd.openxmlformats-officedocument.wordprocessingml.document'];
@@ -1373,6 +1801,7 @@ ${realContent}
   };
 
   const getDropzoneAccept = (): Record<string, string[]> => {
+    if (isOcr) return { 'application/pdf': ['.pdf'], 'image/*': ['.png', '.jpg', '.jpeg', '.webp'] };
     if (isImageToPdf) return { 'image/*': ['.png', '.jpg', '.jpeg'] };
     if (isConvert) {
       if (conversionType === 'word-to-pdf') return { 'application/vnd.openxmlformats-officedocument.wordprocessingml.document': ['.docx'] };
@@ -1384,6 +1813,7 @@ ${realContent}
   };
 
   const getUploadLabel = () => {
+    if (isOcr) return 'Drag & drop PDF scan atau gambar (JPG/PNG/WebP)';
     if (isImageToPdf) return 'Drag & drop file gambar (JPG/PNG)';
     if (isConvert) {
       if (conversionType === 'word-to-pdf') return 'Drag & drop file Word (.docx)';
@@ -1422,23 +1852,38 @@ ${realContent}
             className="p-6 rounded-2xl bg-card border border-border space-y-4 shadow-glow"
           >
             <div className="flex items-center justify-between">
-              <h3 className="text-lg font-bold flex items-center gap-2">
-                <Sparkles className="h-5 w-5 text-pink-400" />
-                Hasil Ekstraksi Teks AI OCR
-              </h3>
-              <Button 
-                variant="outline" 
-                size="sm" 
-                onClick={() => {
-                  navigator.clipboard.writeText(ocrText);
-                  toast.success('Teks berhasil disalin ke clipboard!');
-                }}
-              >
-                Salin Teks
-              </Button>
+              <div>
+                <h3 className="text-lg font-bold flex items-center gap-2">
+                  <Sparkles className="h-5 w-5 text-pink-400" />
+                  Hasil Ekstraksi Teks AI OCR
+                </h3>
+                {ocrSummary && (
+                  <p className="mt-1 text-xs text-muted-foreground">{ocrSummary}</p>
+                )}
+              </div>
+              <div className="flex flex-wrap justify-end gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    navigator.clipboard.writeText(ocrText);
+                    toast.success('Teks berhasil disalin ke clipboard!');
+                  }}
+                >
+                  Salin Teks
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => downloadBlob(new Blob([ocrText], { type: 'text/plain;charset=utf-8' }), `ocr_${Date.now()}.txt`)}
+                >
+                  <Download className="h-4 w-4" />
+                  Unduh TXT
+                </Button>
+              </div>
             </div>
             <textarea
-              className="w-full h-80 bg-surface-2 border border-border p-4 rounded-xl text-sm font-mono focus:outline-none focus:ring-1 focus:ring-primary"
+              className="h-[520px] w-full resize-y rounded-xl border border-border bg-surface-2 p-5 font-mono text-sm leading-7 text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
               value={ocrText}
               onChange={(e) => setOcrText(e.target.value)}
             />
@@ -1491,6 +1936,24 @@ ${realContent}
                       <span className="text-[10px] text-muted-foreground/80">{mode.ext}</span>
                     </button>
                   ))}
+                </div>
+              </div>
+            )}
+
+            {/* OCR CONTROLS */}
+            {toolId === 'ocr' && (
+              <div className="grid gap-3 text-sm text-muted-foreground sm:grid-cols-3">
+                <div className="rounded-xl border border-border bg-card p-3">
+                  <p className="font-semibold text-foreground">PDF digital</p>
+                  <p className="mt-1 text-xs leading-5">Teks asli PDF diekstrak langsung tanpa OCR lambat.</p>
+                </div>
+                <div className="rounded-xl border border-border bg-card p-3">
+                  <p className="font-semibold text-foreground">PDF scan</p>
+                  <p className="mt-1 text-xs leading-5">Halaman dirender dan dibaca dengan OCR lokal di browser.</p>
+                </div>
+                <div className="rounded-xl border border-border bg-card p-3">
+                  <p className="font-semibold text-foreground">Gambar</p>
+                  <p className="mt-1 text-xs leading-5">Mendukung JPG, PNG, dan WebP dengan peningkatan kontras.</p>
                 </div>
               </div>
             )}
@@ -1826,7 +2289,7 @@ ${realContent}
             onFilesAccepted={(newFiles) => setFiles((prev) => [...prev, ...newFiles])}
             files={files}
             onRemoveFile={(index) => setFiles((prev) => prev.filter((_, i) => i !== index))}
-            maxFiles={toolId === 'merge' || toolId === 'image-to-pdf' ? 20 : 1}
+            maxFiles={toolId === 'merge' || toolId === 'image-to-pdf' ? 20 : toolId === 'ocr' ? 10 : 1}
             acceptedTypes={getAcceptedTypes()}
             dropzoneAccept={getDropzoneAccept()}
             label={getUploadLabel()}

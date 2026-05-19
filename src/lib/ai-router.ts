@@ -5,6 +5,17 @@ import type { AIModel, AIModelConfig, TaskType } from '@/types';
 // ============================================
 
 export const AI_MODELS: Record<AIModel, AIModelConfig> = {
+  'ollama/auto': {
+    id: 'ollama/auto',
+    name: 'Ollama VPS',
+    provider: 'Ollama',
+    icon: '🖥️',
+    description: 'Model lokal dari VPS untuk chat privat dan hemat biaya',
+    strengths: ['Private', 'Local VPS', 'No per-token cost'],
+    costPerMToken: 0,
+    maxTokens: 4096,
+    speed: 'medium',
+  },
   'google/gemini-2.0-flash-exp': {
     id: 'google/gemini-2.0-flash-exp',
     name: 'Gemini Flash',
@@ -67,7 +78,7 @@ export const AI_MODELS: Record<AIModel, AIModelConfig> = {
 // ============================================
 
 const TASK_MODEL_MAP: Record<TaskType, AIModel> = {
-  chat: 'google/gemini-2.0-flash-exp',
+  chat: 'ollama/auto',
   summarize: 'google/gemini-2.0-flash-exp',
   analyze: 'anthropic/claude-3.5-sonnet',
   translate: 'qwen/qwen-2.5-72b-instruct',
