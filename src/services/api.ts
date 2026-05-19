@@ -7,6 +7,45 @@ interface ChatRequest {
   documentContext?: string;
 }
 
+const apiBaseUrl = (import.meta.env.VITE_API_URL || '/api').replace(/\/$/, '');
+
+export function buildApiUrl(path: string) {
+  const normalizedPath = path.startsWith('/') ? path : `/${path}`;
+
+  if (!apiBaseUrl) {
+    return normalizedPath;
+  }
+
+  if (apiBaseUrl.endsWith('/api') && normalizedPath.startsWith('/api/')) {
+    return `${apiBaseUrl}${normalizedPath.slice(4)}`;
+  }
+
+  return `${apiBaseUrl}${normalizedPath}`;
+}
+
+export async function summarizeDocument(documentId: string, model?: AIModel): Promise<string> {
+  const { data: { session } } = await supabase.auth.getSession();
+
+  const response = await fetch(buildApiUrl(`/api/v1/documents/${documentId}/summary`), {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {})
+    },
+    body: JSON.stringify({
+      model: model || 'google/gemini-2.0-flash-exp',
+    }),
+  });
+
+  if (!response.ok) {
+    const payload = await response.json().catch(() => null);
+    throw new Error(payload?.error || 'Failed to summarize document');
+  }
+
+  const payload = await response.json();
+  return payload.summary;
+}
+
 
 
 /**
@@ -17,9 +56,12 @@ export async function streamChatMessage(
   onChunk: (chunk: string) => void
 ): Promise<void> {
   const { data: { session } } = await supabase.auth.getSession();
-  const vpsUrl = import.meta.env.VITE_API_URL || 'http://localhost:3000';
 
-  const response = await fetch(`${vpsUrl}/api/v1/chat/completions`, {
+  if (!request.documentContext) {
+    throw new Error('Pilih dokumen terlebih dahulu.');
+  }
+
+  const response = await fetch(buildApiUrl('/api/v1/chat/completions'), {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -152,4 +194,29 @@ export async function deleteDocument(id: string, filePath: string) {
     .eq('id', id);
 
   if (error) throw error;
+}
+
+/**
+ * Convert a Word document (.docx) to PDF using the backend Gotenberg engine.
+ */
+export async function convertWordToPdf(file: File): Promise<Blob> {
+  const { data: { session } } = await supabase.auth.getSession();
+
+  const formData = new FormData();
+  formData.append('file', file);
+
+  const response = await fetch(buildApiUrl('/api/convert/word-to-pdf'), {
+    method: 'POST',
+    headers: {
+      ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {})
+    },
+    body: formData,
+  });
+
+  if (!response.ok) {
+    const payload = await response.json().catch(() => null);
+    throw new Error(payload?.error || 'Gagal mengonversi file Word ke PDF');
+  }
+
+  return response.blob();
 }

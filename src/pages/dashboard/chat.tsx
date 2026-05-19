@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Send,
@@ -11,13 +12,16 @@ import {
   RotateCcw,
   FileText,
   ChevronDown,
+  Loader2,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 import { AI_MODELS } from '@/lib/ai-router';
-import type { AIModel } from '@/types';
-import { streamChatMessage } from '@/services/api';
+import type { AIModel, PDFDocument } from '@/types';
+import { streamChatMessage, summarizeDocument } from '@/services/api';
+import { supabase } from '@/lib/supabase';
+import { toast } from 'sonner';
 
 interface Message {
   id: string;
@@ -45,11 +49,15 @@ const suggestedQuestions = [
 ];
 
 export default function ChatPage() {
+  const [searchParams] = useSearchParams();
+  const documentId = searchParams.get('doc');
   const [messages, setMessages] = useState<Message[]>(initialMessages);
   const [input, setInput] = useState('');
   const [isTyping, setIsTyping] = useState(false);
+  const [isSummarizing, setIsSummarizing] = useState(false);
   const [selectedModel, setSelectedModel] = useState<AIModel>('google/gemini-2.0-flash-exp');
   const [showModelPicker, setShowModelPicker] = useState(false);
+  const [activeDocument, setActiveDocument] = useState<PDFDocument | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
@@ -57,8 +65,67 @@ export default function ChatPage() {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, isTyping]);
 
+  useEffect(() => {
+    const fetchDocument = async () => {
+      if (!documentId) {
+        setActiveDocument(null);
+        return;
+      }
+
+      const { data, error } = await supabase
+        .from('documents')
+        .select('*')
+        .eq('id', documentId)
+        .single();
+
+      if (error) {
+        toast.error('Dokumen chat tidak ditemukan.');
+        setActiveDocument(null);
+        return;
+      }
+
+      setActiveDocument(data as PDFDocument);
+    };
+
+    fetchDocument();
+  }, [documentId]);
+
+  const appendAssistantMessage = (content: string) => {
+    setMessages((prev) => [
+      ...prev,
+      {
+        id: crypto.randomUUID(),
+        role: 'assistant',
+        content,
+        model: AI_MODELS[selectedModel].name,
+        timestamp: new Date(),
+      },
+    ]);
+  };
+
+  const handleSummarize = async () => {
+    if (!documentId) {
+      toast.warning('Buka chat dari salah satu dokumen terlebih dahulu.');
+      return;
+    }
+
+    setIsSummarizing(true);
+    try {
+      const summary = await summarizeDocument(documentId, selectedModel);
+      appendAssistantMessage(summary);
+    } catch (error: any) {
+      toast.error(error.message || 'Gagal membuat ringkasan dokumen.');
+    } finally {
+      setIsSummarizing(false);
+    }
+  };
+
   const handleSend = async () => {
     if (!input.trim()) return;
+    if (!documentId) {
+      toast.warning('Pilih dokumen dari halaman Dokumen Saya untuk memulai chat RAG.');
+      return;
+    }
 
     const userContent = input.trim();
     const userMsg: Message = {
@@ -89,14 +156,11 @@ export default function ChatPage() {
       const apiMessages = messages.map(m => ({ role: m.role, content: m.content }));
       apiMessages.push({ role: 'user', content: userContent }); // Add the new one
 
-      // Replace with an actual documentId from your state/route if you have one
-      const dummyDocumentId = "00000000-0000-0000-0000-000000000000"; 
-
       await streamChatMessage(
         {
           messages: apiMessages,
           model: selectedModel,
-          documentContext: dummyDocumentId, 
+          documentContext: documentId,
         },
         (chunk) => {
           setMessages((prev) => 
@@ -133,12 +197,24 @@ export default function ChatPage() {
           </div>
           <div>
             <h2 className="text-sm font-semibold">AI Chat PDF</h2>
-            <p className="text-xs text-muted-foreground">Tanya apa saja tentang dokumen Anda</p>
+            <p className="text-xs text-muted-foreground">
+              {activeDocument ? activeDocument.name : 'Buka dari Dokumen Saya untuk memilih konteks'}
+            </p>
           </div>
         </div>
 
         {/* Model Picker */}
-        <div className="relative">
+        <div className="relative flex items-center gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleSummarize}
+            disabled={!documentId || isSummarizing}
+            className="gap-2"
+          >
+            {isSummarizing ? <Loader2 className="h-3 w-3 animate-spin" /> : <Sparkles className="h-3 w-3" />}
+            <span className="hidden sm:inline">Ringkas</span>
+          </Button>
           <Button
             variant="outline"
             size="sm"
@@ -292,6 +368,11 @@ export default function ChatPage() {
       {/* Input area */}
       <div className="border-t border-border bg-background/80 backdrop-blur-sm p-4">
         <div className="mx-auto max-w-4xl">
+          {!documentId && (
+            <div className="mb-3 rounded-xl border border-amber-500/20 bg-amber-500/10 px-3 py-2 text-xs text-amber-300">
+              Pilih dokumen dari halaman Dokumen Saya agar AI memakai konteks PDF yang benar.
+            </div>
+          )}
           <div className="flex items-end gap-2 rounded-2xl border border-border bg-surface-2 p-2 focus-within:border-primary/50 transition-colors">
             <Button variant="ghost" size="icon-sm" className="shrink-0 mb-0.5">
               <Paperclip className="h-4 w-4" />
@@ -313,7 +394,7 @@ export default function ChatPage() {
               variant="gradient"
               size="icon"
               onClick={handleSend}
-              disabled={!input.trim() || isTyping}
+              disabled={!input.trim() || isTyping || !documentId}
               className="shrink-0 rounded-xl"
             >
               <Send className="h-4 w-4" />

@@ -13,9 +13,17 @@ export interface User {
   updated_at: string;
 }
 
+export interface Folder {
+  id: string;
+  user_id: string;
+  name: string;
+  created_at: string;
+}
+
 export interface PDFDocument {
   id: string;
   user_id: string;
+  folder_id?: string | null;
   name: string;
   file_url: string;
   file_size: number;

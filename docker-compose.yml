@@ -1,80 +1,112 @@
 version: '3.8'
 
 services:
-  # 1. API Server (Node.js)
+  # 1. Reverse Proxy & API Gateway (Nginx)
+  nginx:
+    image: nginx:alpine
+    container_name: documind-nginx
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./config/nginx.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      api:
+        condition: service_healthy
+    mem_limit: 100m
+
+  # 2. API Server (Node.js)
   api:
     build: 
       context: ./backend
       dockerfile: Dockerfile
     container_name: documind-api
     restart: unless-stopped
-    ports:
-      - "3000:3000"
+    # Port 3000 is now internal, Nginx handles port 80
+    expose:
+      - "3000"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    mem_limit: 300m
+    memswap_limit: 300m
     environment:
       - NODE_ENV=production
       - REDIS_URL=redis://redis:6379
       - SUPABASE_URL=${VITE_SUPABASE_URL}
       - SUPABASE_SERVICE_KEY=${SUPABASE_SERVICE_KEY}
       - OPENROUTER_API_KEY=${OPENROUTER_API_KEY}
-      - OLLAMA_HOST=http://ollama:11434
+      - OLLAMA_HOST=http://host.docker.internal:11434
+      - CLEANUP_RETENTION_HOURS=${CLEANUP_RETENTION_HOURS:-24}
+      - CLEANUP_BATCH_SIZE=${CLEANUP_BATCH_SIZE:-100}
+      - TMP_CLEANUP_DIR=/tmp/documind
+      - GOTENBERG_URL=http://gotenberg:3000
     depends_on:
       redis:
         condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:3000/api/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
 
-  # 2. Background Worker (BullMQ + Redis)
+  # 3. Background Worker (BullMQ + Redis)
   worker:
     build: 
       context: ./backend
       dockerfile: Dockerfile
     command: npm run start:worker
     container_name: documind-worker
-    restart: unless-stopped
+    restart: on-failure
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    mem_limit: 400m
+    memswap_limit: 400m
     environment:
       - NODE_ENV=production
       - REDIS_URL=redis://redis:6379
       - SUPABASE_URL=${VITE_SUPABASE_URL}
       - SUPABASE_SERVICE_KEY=${SUPABASE_SERVICE_KEY}
       - OPENROUTER_API_KEY=${OPENROUTER_API_KEY}
-      - OLLAMA_HOST=http://ollama:11434
+      - OLLAMA_HOST=http://host.docker.internal:11434
+      - CLEANUP_RETENTION_HOURS=${CLEANUP_RETENTION_HOURS:-24}
+      - CLEANUP_BATCH_SIZE=${CLEANUP_BATCH_SIZE:-100}
+      - TMP_CLEANUP_DIR=/tmp/documind
     depends_on:
       redis:
         condition: service_healthy
     deploy:
-      replicas: 2 # Scale workers as needed
+      replicas: 1 # Strictly 1 for 2GB VPS
 
-  # 3. Redis (Message Queue & Caching)
+  # 4. Redis (Message Queue & Caching)
   redis:
     image: redis:7-alpine
     container_name: documind-redis
     restart: unless-stopped
-    ports:
-      - "6379:6379"
+    # Use custom config to limit memory
+    command: redis-server /usr/local/etc/redis/redis.conf
+    expose:
+      - "6379"
+    mem_limit: 150m
+    memswap_limit: 150m
     volumes:
       - redis_data:/data
+      - ./config/redis.conf:/usr/local/etc/redis/redis.conf:ro
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 5s
       timeout: 3s
       retries: 5
 
-  # 4. Ollama (Local AI Engine)
-  ollama:
-    image: ollama/ollama:latest
-    container_name: documind-ollama
+  # 5. Gotenberg (Office to PDF High Fidelity Engine)
+  gotenberg:
+    image: gotenberg/gotenberg:8
+    container_name: documind-gotenberg
     restart: unless-stopped
-    ports:
-      - "11434:11434"
-    volumes:
-      - ollama_data:/root/.ollama
-    # If your VPS has GPU, uncomment below:
-    # deploy:
-    #   resources:
-    #     reservations:
-    #       devices:
-    #         - driver: nvidia
-    #           count: 1
-    #           capabilities: [gpu]
+    expose:
+      - "3000"
+    mem_limit: 200m
+    memswap_limit: 200m
 
 volumes:
   redis_data:
-  ollama_data:

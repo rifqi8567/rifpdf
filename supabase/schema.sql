@@ -58,6 +58,23 @@ CREATE INDEX idx_documents_user_id ON public.documents(user_id);
 CREATE INDEX idx_documents_created_at ON public.documents(created_at DESC);
 
 -- ============================================
+-- Document Chunks Table (RAG / Embeddings)
+-- ============================================
+CREATE EXTENSION IF NOT EXISTS vector;
+
+CREATE TABLE IF NOT EXISTS public.document_chunks (
+  id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
+  document_id UUID REFERENCES public.documents(id) ON DELETE CASCADE NOT NULL,
+  content TEXT NOT NULL,
+  embedding VECTOR(768) NOT NULL,
+  metadata JSONB DEFAULT '{}',
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX idx_document_chunks_document_id ON public.document_chunks(document_id);
+CREATE INDEX idx_document_chunks_embedding ON public.document_chunks USING ivfflat (embedding vector_cosine_ops) WITH (lists = 100);
+
+-- ============================================
 -- Chat Sessions Table
 -- ============================================
 CREATE TABLE IF NOT EXISTS public.chat_sessions (
@@ -111,6 +128,7 @@ ALTER TABLE public.documents ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.chat_sessions ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.chat_messages ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.usage_logs ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.document_chunks ENABLE ROW LEVEL SECURITY;
 
 -- Profiles: users can only read/update their own profile
 CREATE POLICY "Users can view own profile" ON public.profiles
@@ -150,6 +168,14 @@ CREATE POLICY "Users can view own usage logs" ON public.usage_logs
 
 CREATE POLICY "Users can insert own usage logs" ON public.usage_logs
   FOR INSERT WITH CHECK (auth.uid() = user_id);
+
+-- Document chunks are accessible through the owning document.
+CREATE POLICY "Users can view chunks in own documents" ON public.document_chunks
+  FOR SELECT USING (
+    document_id IN (
+      SELECT id FROM public.documents WHERE user_id = auth.uid()
+    )
+  );
 
 -- ============================================
 -- Storage Bucket

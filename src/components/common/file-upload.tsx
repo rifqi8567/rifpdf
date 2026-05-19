@@ -8,21 +8,25 @@ import { Button } from '@/components/ui/button';
 interface FileUploadProps {
   onFilesAccepted: (files: File[]) => void;
   acceptedTypes?: string[];
+  dropzoneAccept?: Record<string, string[]>;
   maxSize?: number;
   maxFiles?: number;
   files?: File[];
   onRemoveFile?: (index: number) => void;
   className?: string;
+  label?: string;
 }
 
 export function FileUpload({
   onFilesAccepted,
   acceptedTypes = ALLOWED_PDF_TYPES,
+  dropzoneAccept,
   maxSize = MAX_FILE_SIZE,
   maxFiles = 10,
   files = [],
   onRemoveFile,
   className,
+  label,
 }: FileUploadProps) {
   const onDrop = useCallback(
     (acceptedFiles: File[]) => {
@@ -36,7 +40,7 @@ export function FileUpload({
 
   const { getRootProps, getInputProps, isDragActive, isDragReject } = useDropzone({
     onDrop,
-    accept: { 'application/pdf': ['.pdf'] },
+    accept: dropzoneAccept || { 'application/pdf': ['.pdf'] },
     maxSize,
     maxFiles,
     multiple: maxFiles > 1,
@@ -73,7 +77,7 @@ export function FileUpload({
         </motion.div>
 
         <h3 className="text-base font-semibold text-foreground mb-1">
-          {isDragActive ? 'Lepaskan file di sini' : 'Drag & drop file PDF'}
+          {isDragActive ? 'Lepaskan file di sini' : (label || 'Drag & drop file PDF')}
         </h3>
         <p className="text-sm text-muted-foreground mb-4">
           atau klik untuk memilih file · Maks {formatFileSize(maxSize)}

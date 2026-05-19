@@ -11,6 +11,8 @@ const ChatPage = lazy(() => import('@/pages/dashboard/chat'));
 const DocumentsPage = lazy(() => import('@/pages/dashboard/documents'));
 const SettingsPage = lazy(() => import('@/pages/dashboard/settings'));
 const ToolPage = lazy(() => import('@/pages/dashboard/tools'));
+const ToolPreviewPage = lazy(() => import('@/pages/dashboard/tool-preview'));
+const HelpPage = lazy(() => import('@/pages/dashboard/help'));
 
 // Loading fallback
 function PageLoader() {
@@ -102,6 +104,14 @@ const router = createBrowserRouter([
         ),
       },
       {
+        path: 'tools/:toolId/preview',
+        element: (
+          <Suspense fallback={<PageLoader />}>
+            <ToolPreviewPage />
+          </Suspense>
+        ),
+      },
+      {
         path: 'billing',
         element: (
           <Suspense fallback={<PageLoader />}>
@@ -113,7 +123,7 @@ const router = createBrowserRouter([
         path: 'help',
         element: (
           <Suspense fallback={<PageLoader />}>
-            <SettingsPage />
+            <HelpPage />
           </Suspense>
         ),
       },

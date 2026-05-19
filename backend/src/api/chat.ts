@@ -55,6 +55,21 @@ router.post('/completions', requireAuth, async (req: Request, res: Response) => 
       return res.status(400).json({ error: 'Invalid request body. documentId and messages array are required.' });
     }
 
+    const { data: document, error: documentError } = await supabaseAdmin
+      .from('documents')
+      .select('id, user_id, status')
+      .eq('id', documentId)
+      .eq('user_id', userId)
+      .single();
+
+    if (documentError || !document) {
+      return res.status(404).json({ error: 'Document not found' });
+    }
+
+    if (document.status === 'processing' || document.status === 'uploading') {
+      return res.status(409).json({ error: 'Document is still processing' });
+    }
+
     // Get the latest user message
     const latestUserMessage = messages[messages.length - 1].content;
 
