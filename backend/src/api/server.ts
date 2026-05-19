@@ -25,8 +25,15 @@ app.use(helmet({
   crossOriginEmbedderPolicy: false,
 }));
 
+const allowedOrigins = [
+  'http://localhost:5173',
+  'http://localhost:5174',
+  ...(process.env.FRONTEND_URL ? process.env.FRONTEND_URL.split(',').map((origin) => origin.trim()) : [])
+];
+
 app.use(cors({
-  origin: process.env.FRONTEND_URL ? process.env.FRONTEND_URL.split(',').map((origin) => origin.trim()) : true,
+  origin: allowedOrigins,
+  credentials: true,
 }));
 app.use(express.json({ limit: '10mb' })); // Limit payload to prevent memory exhaustion
 
