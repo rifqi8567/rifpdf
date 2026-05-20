@@ -44,12 +44,18 @@ const fadeUp = {
 const normalizeStoragePath = (value: string) => {
   if (!value) return value;
 
-  return value
+  const path = value
     .replace(/^https?:\/\/[^/]+\/storage\/v1\/object\/(?:public|sign)\/documents\//, '')
     .replace(/^\/?storage\/v1\/object\/(?:public|sign)\/documents\//, '')
     .replace(/^documents\//, '')
     .replace(/^\/+/, '')
     .split('?')[0];
+
+  try {
+    return decodeURIComponent(path);
+  } catch {
+    return path;
+  }
 };
 
 export default function DocumentsPage() {

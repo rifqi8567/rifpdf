@@ -13,12 +13,18 @@ interface PdfThumbnailProps {
 const normalizeStoragePath = (value: string) => {
   if (!value) return value;
 
-  return value
+  const path = value
     .replace(/^https?:\/\/[^/]+\/storage\/v1\/object\/(?:public|sign)\/documents\//, '')
     .replace(/^\/?storage\/v1\/object\/(?:public|sign)\/documents\//, '')
     .replace(/^documents\//, '')
     .replace(/^\/+/, '')
     .split('?')[0];
+
+  try {
+    return decodeURIComponent(path);
+  } catch {
+    return path;
+  }
 };
 
 export function PdfThumbnail({ fileUrl }: PdfThumbnailProps) {
@@ -27,12 +33,14 @@ export function PdfThumbnail({ fileUrl }: PdfThumbnailProps) {
 
   useEffect(() => {
     const fetchUrl = async () => {
-      const { data } = await supabase.storage
+      const path = normalizeStoragePath(fileUrl);
+      const { data, error } = await supabase.storage
         .from('documents')
-        .createSignedUrl(normalizeStoragePath(fileUrl), 3600);
+        .createSignedUrl(path, 3600);
       if (data?.signedUrl) {
         setSignedUrl(data.signedUrl);
       } else {
+        console.error('THUMBNAIL SIGNED URL ERROR:', error, { fileUrl, path });
         setError(true);
       }
     };
