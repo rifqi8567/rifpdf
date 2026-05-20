@@ -58,5 +58,5 @@ export const ALLOWED_DOC_TYPES = [
   'application/vnd.openxmlformats-officedocument.presentationml.presentation',
 ];
 
-export const MAX_FILE_SIZE = 50 * 1024 * 1024; // 50MB
+export const MAX_FILE_SIZE = 100 * 1024 * 1024; // 100MB
 export const MAX_FREE_FILE_SIZE = 10 * 1024 * 1024; // 10MB

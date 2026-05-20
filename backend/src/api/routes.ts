@@ -65,7 +65,7 @@ import fetch from 'node-fetch';
 const upload = multer({
   storage: multer.memoryStorage(),
   limits: {
-    fileSize: 15 * 1024 * 1024, // 15MB max
+    fileSize: 100 * 1024 * 1024, // 100MB max
   }
 });
 
@@ -102,4 +102,3 @@ router.post('/convert/word-to-pdf', requireAuth, upload.single('file'), async (r
     res.status(500).json({ error: `Gagal mengonversi file: ${error.message}` });
   }
 });
-
