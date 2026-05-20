@@ -43,10 +43,7 @@ import { toast } from 'sonner';
 import { convertWordToPdf } from '@/services/api';
 
 // Keep PDF rendering fully client-side without depending on an external CDN.
-pdfjs.GlobalWorkerOptions.workerSrc = new URL(
-  'pdfjs-dist/build/pdf.worker.min.mjs',
-  import.meta.url
-).toString();
+pdfjs.GlobalWorkerOptions.workerSrc = '/pdf.worker.min.js';
 
 const toolsConfig: Record<string, { title: string; description: string; icon: React.ElementType; color: string; bg: string }> = {
   merge: { title: 'Merge PDF', description: 'Gabungkan beberapa file PDF menjadi satu dokumen', icon: Merge, color: 'text-blue-400', bg: 'from-blue-500 to-blue-600' },
