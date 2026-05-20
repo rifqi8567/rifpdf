@@ -46,6 +46,31 @@ export async function summarizeDocument(documentId: string, model?: AIModel): Pr
   return payload.summary;
 }
 
+export async function analyzeOcrText(text: string, fileName: string, model?: AIModel): Promise<string> {
+  const { data: { session } } = await supabase.auth.getSession();
+
+  const response = await fetch(buildApiUrl('/api/v1/ocr/analyze'), {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {})
+    },
+    body: JSON.stringify({
+      text,
+      fileName,
+      model: model || 'ollama/auto',
+    }),
+  });
+
+  if (!response.ok) {
+    const payload = await response.json().catch(() => null);
+    throw new Error(payload?.error || payload?.details || `Gagal menganalisis OCR dengan AI (${response.status})`);
+  }
+
+  const payload = await response.json();
+  return payload.analysis;
+}
+
 
 
 /**

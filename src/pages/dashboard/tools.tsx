@@ -40,7 +40,7 @@ import { createWorker, PSM } from 'tesseract.js';
 import { supabase } from '@/lib/supabase';
 import { useAuthStore } from '@/store/auth-store';
 import { toast } from 'sonner';
-import { convertWordToPdf } from '@/services/api';
+import { analyzeOcrText, convertWordToPdf } from '@/services/api';
 
 // Keep PDF rendering fully client-side without depending on an external CDN.
 pdfjs.GlobalWorkerOptions.workerSrc = '/pdf.worker.min.js';
@@ -1022,10 +1022,31 @@ export default function ToolPage() {
       const ocrPages = pageResults.filter((page) => page.source === 'ocr');
       const textLayerPages = pageResults.filter((page) => page.source === 'text-layer');
       const avgConfidence = averageConfidence(ocrPages);
+      const structuredOutput = buildOcrOutput(pageResults);
+      const rawOcrText = buildOcrPlainText(pageResults);
+      const fileLabel = files.map((file) => file.name).join(', ');
 
-      setOcrText(buildOcrOutput(pageResults));
+      setProcessingMessage('AI sedang membaca hasil OCR dan membuat simpulan...');
+
+      let finalOutput = structuredOutput;
+      let usedAiAnalysis = false;
+
+      try {
+        const aiAnalysis = await analyzeOcrText(
+          rawOcrText || structuredOutput,
+          fileLabel
+        );
+        finalOutput = buildOcrAiOutput(aiAnalysis, structuredOutput, rawOcrText);
+        usedAiAnalysis = true;
+      } catch (error) {
+        console.warn('AI OCR analysis failed, using local structured output:', error);
+        toast.warning('AI belum bisa menganalisis OCR. Menampilkan hasil terstruktur lokal.');
+      }
+
+      setOcrText(finalOutput);
       setOcrSummary(
         [
+          usedAiAnalysis ? 'Jawaban AI + hasil OCR siap' : 'Hasil OCR terstruktur siap',
           `${pageResults.length} bagian diproses`,
           textLayerPages.length > 0 ? `${textLayerPages.length} dari text layer PDF` : '',
           ocrPages.length > 0 ? `${ocrPages.length} dengan OCR scan` : '',
@@ -1330,6 +1351,37 @@ export default function ToolPage() {
     items
       .map((item) => `  ${item}`)
       .join('\n');
+
+  const buildOcrPlainText = (pages: OcrPageResult[]) =>
+    pages
+      .map((page, index) => {
+        const method = page.source === 'text-layer' ? 'Text layer PDF' : 'OCR scan';
+        const confidence = typeof page.confidence === 'number'
+          ? ` | Akurasi ${Math.round(page.confidence)}%`
+          : '';
+
+        return [
+          `[Bagian ${index + 1}] ${page.label}`,
+          `Metode: ${method}${confidence}`,
+          normalizeOcrText(page.text),
+        ].join('\n');
+      })
+      .join('\n\n---\n\n')
+      .trim();
+
+  const buildOcrAiOutput = (aiAnalysis: string, structuredOutput: string, rawOcrText: string) =>
+    [
+      'JAWABAN & SIMPULAN AI',
+      '=====================',
+      '',
+      normalizeOcrText(aiAnalysis),
+      '',
+      formatSectionTitle('HASIL OCR TERSTRUKTUR'),
+      structuredOutput,
+      '',
+      formatSectionTitle('TEKS MENTAH OCR'),
+      rawOcrText || 'Tidak ada teks mentah yang berhasil diekstrak.',
+    ].join('\n').replace(/\n{4,}/g, '\n\n\n').trim();
 
   const buildOcrOutput = (pages: OcrPageResult[]) => {
     if (pages.length === 0) {

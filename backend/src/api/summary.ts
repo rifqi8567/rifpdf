@@ -139,4 +139,53 @@ ${context}`,
   });
 });
 
+router.post('/ocr/analyze', requireAuth, async (req: Request, res: Response) => {
+  const { text, fileName = 'hasil OCR', model = env.AI_PROVIDER === 'ollama' ? 'ollama/auto' : 'google/gemini-2.0-flash-exp' } = req.body as {
+    text?: string;
+    fileName?: string;
+    model?: string;
+  };
+
+  const context = typeof text === 'string' ? text.trim().slice(0, 28000) : '';
+
+  if (context.length < 20) {
+    return res.status(422).json({ error: 'Teks OCR terlalu pendek untuk dianalisis AI' });
+  }
+
+  const messages = [
+    {
+      role: 'system',
+      content: 'Anda analis dokumen OCR. Jawab dalam bahasa Indonesia yang jelas, rapi, dan praktis. Gunakan hanya informasi dari teks OCR. Jika ada bagian yang tidak jelas, sebutkan sebagai kemungkinan salah baca OCR.',
+    },
+    {
+      role: 'user',
+      content: `Analisis hasil OCR dari "${fileName}" berikut.
+
+Buat output dengan format:
+1. Jawaban singkat: jelaskan dokumen ini tentang apa
+2. Simpulan utama: 3-5 kalimat
+3. Poin penting: bullet yang paling relevan
+4. Penjelasan rapi: uraikan isi dokumen dengan bahasa mudah dipahami
+5. Hal yang perlu dicek: data atau kata yang mungkin perlu diverifikasi karena OCR bisa salah baca
+6. Tindak lanjut: langkah praktis berikutnya bila ada
+
+Teks OCR:
+${context}`,
+    },
+  ];
+
+  const analysis = isOllamaModel(model)
+    ? await generateWithOllama(model, messages)
+    : await generateWithOpenRouter(model, messages);
+
+  if (!analysis) {
+    return res.status(502).json({ error: 'AI provider returned an empty OCR analysis' });
+  }
+
+  res.json({
+    model,
+    analysis,
+  });
+});
+
 export default router;
