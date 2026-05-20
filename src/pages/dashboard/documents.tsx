@@ -46,7 +46,9 @@ const normalizeStoragePath = (value: string) => {
 
   return value
     .replace(/^https?:\/\/[^/]+\/storage\/v1\/object\/(?:public|sign)\/documents\//, '')
+    .replace(/^\/?storage\/v1\/object\/(?:public|sign)\/documents\//, '')
     .replace(/^documents\//, '')
+    .replace(/^\/+/, '')
     .split('?')[0];
 };
 
