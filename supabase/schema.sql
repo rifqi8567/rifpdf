@@ -38,11 +38,26 @@ CREATE OR REPLACE TRIGGER on_auth_user_created
   FOR EACH ROW EXECUTE FUNCTION public.handle_new_user();
 
 -- ============================================
+-- Folders Table
+-- ============================================
+CREATE TABLE IF NOT EXISTS public.folders (
+  id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
+  user_id UUID REFERENCES public.profiles(id) ON DELETE CASCADE NOT NULL,
+  name TEXT NOT NULL,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_folders_user_id ON public.folders(user_id);
+CREATE INDEX IF NOT EXISTS idx_folders_created_at ON public.folders(created_at DESC);
+
+-- ============================================
 -- Documents Table
 -- ============================================
 CREATE TABLE IF NOT EXISTS public.documents (
   id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
   user_id UUID REFERENCES public.profiles(id) ON DELETE CASCADE NOT NULL,
+  folder_id UUID REFERENCES public.folders(id) ON DELETE SET NULL,
   name TEXT NOT NULL,
   file_url TEXT NOT NULL,
   file_size BIGINT NOT NULL,
@@ -56,6 +71,11 @@ CREATE TABLE IF NOT EXISTS public.documents (
 
 CREATE INDEX idx_documents_user_id ON public.documents(user_id);
 CREATE INDEX idx_documents_created_at ON public.documents(created_at DESC);
+
+ALTER TABLE public.documents
+  ADD COLUMN IF NOT EXISTS folder_id UUID REFERENCES public.folders(id) ON DELETE SET NULL;
+
+CREATE INDEX IF NOT EXISTS idx_documents_folder_id ON public.documents(folder_id);
 
 -- ============================================
 -- Document Chunks Table (RAG / Embeddings)
@@ -124,6 +144,7 @@ CREATE INDEX idx_usage_logs_user_id ON public.usage_logs(user_id);
 -- ============================================
 
 ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.folders ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.documents ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.chat_sessions ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.chat_messages ENABLE ROW LEVEL SECURITY;
@@ -136,6 +157,19 @@ CREATE POLICY "Users can view own profile" ON public.profiles
 
 CREATE POLICY "Users can update own profile" ON public.profiles
   FOR UPDATE USING (auth.uid() = id);
+
+-- Folders: users can only manage their own folders
+CREATE POLICY "Users can view own folders" ON public.folders
+  FOR SELECT USING (auth.uid() = user_id);
+
+CREATE POLICY "Users can insert own folders" ON public.folders
+  FOR INSERT WITH CHECK (auth.uid() = user_id);
+
+CREATE POLICY "Users can update own folders" ON public.folders
+  FOR UPDATE USING (auth.uid() = user_id);
+
+CREATE POLICY "Users can delete own folders" ON public.folders
+  FOR DELETE USING (auth.uid() = user_id);
 
 -- Documents: users can only manage their own documents
 CREATE POLICY "Users can view own documents" ON public.documents
@@ -180,15 +214,20 @@ CREATE POLICY "Users can view chunks in own documents" ON public.document_chunks
 -- ============================================
 -- Storage Bucket
 -- ============================================
--- Run in Supabase dashboard:
--- INSERT INTO storage.buckets (id, name, public) VALUES ('documents', 'documents', false);
+INSERT INTO storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+VALUES ('documents', 'documents', false, 104857600, ARRAY['application/pdf'])
+ON CONFLICT (id) DO UPDATE
+SET
+  public = EXCLUDED.public,
+  file_size_limit = EXCLUDED.file_size_limit,
+  allowed_mime_types = EXCLUDED.allowed_mime_types;
 
 -- Storage RLS: users can only access their own files
--- CREATE POLICY "Users can upload own files" ON storage.objects
---   FOR INSERT WITH CHECK (bucket_id = 'documents' AND auth.uid()::text = (storage.foldername(name))[1]);
+CREATE POLICY "Users can upload own files" ON storage.objects
+  FOR INSERT WITH CHECK (bucket_id = 'documents' AND auth.uid()::text = (storage.foldername(name))[1]);
 
--- CREATE POLICY "Users can view own files" ON storage.objects
---   FOR SELECT USING (bucket_id = 'documents' AND auth.uid()::text = (storage.foldername(name))[1]);
+CREATE POLICY "Users can view own files" ON storage.objects
+  FOR SELECT USING (bucket_id = 'documents' AND auth.uid()::text = (storage.foldername(name))[1]);
 
--- CREATE POLICY "Users can delete own files" ON storage.objects
---   FOR DELETE USING (bucket_id = 'documents' AND auth.uid()::text = (storage.foldername(name))[1]);
+CREATE POLICY "Users can delete own files" ON storage.objects
+  FOR DELETE USING (bucket_id = 'documents' AND auth.uid()::text = (storage.foldername(name))[1]);
