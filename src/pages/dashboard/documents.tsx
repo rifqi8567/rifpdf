@@ -318,34 +318,16 @@ export default function DocumentsPage() {
   
   const getSignedUrl = async (fileUrl: string) => {
     const candidates = getStoragePathCandidates(fileUrl);
-    let lastError: unknown = null;
-
-    for (const path of candidates) {
-      const { data, error } = await supabase.storage
-        .from('documents')
-        .createSignedUrl(path, 3600);
-
-      if (data?.signedUrl) {
-        return data.signedUrl;
-      }
-
-      lastError = error;
-    }
-
     const publicPath = candidates[0];
+
     if (publicPath) {
       const { data } = supabase.storage.from('documents').getPublicUrl(publicPath);
       if (data.publicUrl) {
-        console.warn('SIGNED URL FALLBACK TO PUBLIC URL:', lastError, {
-          fileUrl,
-          publicPath,
-          candidates,
-        });
         return data.publicUrl;
       }
     }
 
-    console.error('SIGNED URL ERROR:', lastError, { fileUrl, candidates });
+    console.error('PUBLIC URL ERROR:', { fileUrl, candidates });
     toast.error('Gagal mengambil file.');
     return null;
   };

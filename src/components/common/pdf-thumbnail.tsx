@@ -46,36 +46,17 @@ export function PdfThumbnail({ fileUrl }: PdfThumbnailProps) {
   useEffect(() => {
     const fetchUrl = async () => {
       const candidates = getStoragePathCandidates(fileUrl);
-      let lastError: unknown = null;
-
-      for (const path of candidates) {
-        const { data, error } = await supabase.storage
-          .from('documents')
-          .createSignedUrl(path, 3600);
-
-        if (data?.signedUrl) {
-          setSignedUrl(data.signedUrl);
-          return;
-        }
-
-        lastError = error;
-      }
-
       const publicPath = candidates[0];
+
       if (publicPath) {
         const { data } = supabase.storage.from('documents').getPublicUrl(publicPath);
         if (data.publicUrl) {
-          console.warn('THUMBNAIL SIGNED URL FALLBACK TO PUBLIC URL:', lastError, {
-            fileUrl,
-            publicPath,
-            candidates,
-          });
           setSignedUrl(data.publicUrl);
           return;
         }
       }
 
-      console.error('THUMBNAIL SIGNED URL ERROR:', lastError, { fileUrl, candidates });
+      console.error('THUMBNAIL PUBLIC URL ERROR:', { fileUrl, candidates });
       setError(true);
     };
     fetchUrl();
