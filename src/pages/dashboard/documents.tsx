@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAuthStore } from '@/store/auth-store';
-import { supabase } from '@/lib/supabase';
+import { configuredSupabaseUrl, supabase } from '@/lib/supabase';
 import { toast } from 'sonner';
 import type { PDFDocument } from '@/types';
 import {
@@ -70,6 +70,13 @@ const getStoragePathCandidates = (value: string) => {
   return Array.from(new Set(candidates.filter(Boolean)));
 };
 
+const logDocumentsDebug = (label: string, details: Record<string, unknown>) => {
+  console.groupCollapsed(`[Documents Debug] ${label}`);
+  console.log('Supabase URL:', configuredSupabaseUrl);
+  console.log('Details:', details);
+  console.groupEnd();
+};
+
 export default function DocumentsPage() {
   const navigate = useNavigate();
   const { user } = useAuthStore();
@@ -102,12 +109,29 @@ export default function DocumentsPage() {
     if (!user) return;
     
     const fetchData = async () => {
+      logDocumentsDebug('fetch start', {
+        userId: user.id,
+        userEmail: user.email,
+      });
+
       // Fetch documents
-      const { data: docsData } = await supabase
+      const { data: docsData, error: docsError } = await supabase
         .from('documents')
         .select('*')
         .eq('user_id', user.id)
         .order('created_at', { ascending: false });
+
+      logDocumentsDebug('documents query result', {
+        error: docsError,
+        count: docsData?.length ?? 0,
+        sample: docsData?.slice(0, 5).map((doc) => ({
+          id: doc.id,
+          name: doc.name,
+          file_url: doc.file_url,
+          normalizedPath: normalizeStoragePath(doc.file_url),
+          candidates: getStoragePathCandidates(doc.file_url),
+        })),
+      });
         
       if (docsData) setDocs(docsData as PDFDocument[]);
       
@@ -118,6 +142,11 @@ export default function DocumentsPage() {
           .select('*')
           .eq('user_id', user.id)
           .order('created_at', { ascending: false });
+
+        logDocumentsDebug('folders query result', {
+          error,
+          count: foldersData?.length ?? 0,
+        });
           
         if (foldersData && !error) setFolders(foldersData as Folder[]);
       } catch (e) {
@@ -155,6 +184,12 @@ export default function DocumentsPage() {
   const enqueueDocumentProcessing = async (documentId: string) => {
     const { data: { session } } = await supabase.auth.getSession();
 
+    logDocumentsDebug('enqueue processing request', {
+      documentId,
+      apiUrl: buildApiUrl('/api/documents/process'),
+      hasAccessToken: Boolean(session?.access_token),
+    });
+
     const response = await fetch(buildApiUrl('/api/documents/process'), {
       method: 'POST',
       headers: {
@@ -165,8 +200,22 @@ export default function DocumentsPage() {
     });
 
     if (!response.ok) {
+      const payload = await response.text().catch(() => '');
+      logDocumentsDebug('enqueue processing failed', {
+        documentId,
+        status: response.status,
+        statusText: response.statusText,
+        payload,
+      });
       throw new Error('Gagal memasukkan dokumen ke antrean AI.');
     }
+
+    const payload = await response.json().catch(() => null);
+    logDocumentsDebug('enqueue processing success', {
+      documentId,
+      status: response.status,
+      payload,
+    });
   };
 
   const handleProcessUpload = async () => {
@@ -176,16 +225,41 @@ export default function DocumentsPage() {
     
     try {
       const newDocs = [];
+
+      logDocumentsDebug('upload batch start', {
+        userId: user.id,
+        folderId: currentFolder ? currentFolder.id : null,
+        fileCount: uploadedFiles.length,
+        files: uploadedFiles.map((file) => ({
+          name: file.name,
+          type: file.type,
+          size: file.size,
+        })),
+      });
       
       for (const f of uploadedFiles) {
         // Buat nama file unik: user_id/timestamp_namabersih
         const cleanName = f.name.replace(/[^a-zA-Z0-9.\-]/g, '_');
         const filePath = `${user.id}/${Date.now()}_${cleanName}`;
+
+        logDocumentsDebug('storage upload start', {
+          originalName: f.name,
+          cleanName,
+          filePath,
+          fileType: f.type,
+          fileSize: f.size,
+        });
         
         // 1. Upload file fisik ke Supabase Storage
-        const { error: storageError } = await supabase.storage
+        const { data: storageData, error: storageError } = await supabase.storage
           .from('documents')
           .upload(filePath, f);
+
+        logDocumentsDebug('storage upload result', {
+          filePath,
+          data: storageData,
+          error: storageError,
+        });
           
         if (storageError) throw storageError;
         
@@ -206,6 +280,12 @@ export default function DocumentsPage() {
         .from('documents')
         .insert(newDocs)
         .select();
+
+      logDocumentsDebug('documents insert result', {
+        attemptedRows: newDocs,
+        data,
+        error: dbError,
+      });
         
       if (dbError) throw dbError;
       
@@ -214,6 +294,14 @@ export default function DocumentsPage() {
         setDocs((prev) => [...insertedDocs, ...prev]);
 
         const queueResults = await Promise.allSettled(insertedDocs.map((doc) => enqueueDocumentProcessing(doc.id)));
+        logDocumentsDebug('queue results', {
+          insertedDocs: insertedDocs.map((doc) => ({
+            id: doc.id,
+            name: doc.name,
+            file_url: doc.file_url,
+          })),
+          queueResults,
+        });
         const failedQueueCount = queueResults.filter((result) => result.status === 'rejected').length;
         if (failedQueueCount > 0) {
           toast.warning(`${failedQueueCount} dokumen tersimpan, tetapi belum masuk antrean AI.`);
@@ -226,6 +314,12 @@ export default function DocumentsPage() {
       setTimeout(() => setShowSuccessPopup(false), 3000);
       
     } catch (err: any) {
+      logDocumentsDebug('upload batch failed', {
+        error: err,
+        message: err?.message,
+        name: err?.name,
+        statusCode: err?.statusCode,
+      });
       toast.error('Gagal mengunggah dokumen: ' + err.message);
     } finally {
       setIsUploading(false);
@@ -320,25 +414,54 @@ export default function DocumentsPage() {
     const candidates = getStoragePathCandidates(fileUrl);
     const publicPath = candidates[0];
 
+    logDocumentsDebug('resolve document url start', {
+      originalFileUrl: fileUrl,
+      normalizedPath: normalizeStoragePath(fileUrl),
+      candidates,
+      selectedPublicPath: publicPath,
+    });
+
     if (publicPath) {
       const { data } = supabase.storage.from('documents').getPublicUrl(publicPath);
       if (data.publicUrl) {
+        logDocumentsDebug('resolve document url success', {
+          fileUrl,
+          publicPath,
+          publicUrl: data.publicUrl,
+          candidates,
+        });
         return data.publicUrl;
       }
     }
 
+    logDocumentsDebug('resolve document url failed', {
+      fileUrl,
+      candidates,
+    });
     console.error('PUBLIC URL ERROR:', { fileUrl, candidates });
     toast.error('Gagal mengambil file.');
     return null;
   };
 
   const handleView = async (doc: PDFDocument) => {
+    logDocumentsDebug('view clicked', {
+      docId: doc.id,
+      name: doc.name,
+      file_url: doc.file_url,
+      normalizedPath: normalizeStoragePath(doc.file_url),
+    });
     toast.info(`Menyiapkan ${doc.name}...`);
     const url = await getSignedUrl(doc.file_url);
     if (url) window.open(url, '_blank');
   };
 
   const handleDownload = async (doc: PDFDocument) => {
+    logDocumentsDebug('download clicked', {
+      docId: doc.id,
+      name: doc.name,
+      file_url: doc.file_url,
+      normalizedPath: normalizeStoragePath(doc.file_url),
+    });
     toast.success(`Mendownload ${doc.name}...`);
     const url = await getSignedUrl(doc.file_url);
     if (url) {

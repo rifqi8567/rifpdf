@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Document, Page, pdfjs } from 'react-pdf';
 import { FileText, Loader2 } from 'lucide-react';
-import { supabase } from '@/lib/supabase';
+import { configuredSupabaseUrl, supabase } from '@/lib/supabase';
 
 // Keep PDF thumbnails on the same bundled worker used by the tool pages.
 pdfjs.GlobalWorkerOptions.workerSrc = '/pdf.worker.min.js';
@@ -39,6 +39,13 @@ const getStoragePathCandidates = (value: string) => {
   return Array.from(new Set(candidates.filter(Boolean)));
 };
 
+const logThumbnailDebug = (label: string, details: Record<string, unknown>) => {
+  console.groupCollapsed(`[PDF Thumbnail Debug] ${label}`);
+  console.log('Supabase URL:', configuredSupabaseUrl);
+  console.log('Details:', details);
+  console.groupEnd();
+};
+
 export function PdfThumbnail({ fileUrl }: PdfThumbnailProps) {
   const [signedUrl, setSignedUrl] = useState<string | null>(null);
   const [error, setError] = useState(false);
@@ -48,14 +55,28 @@ export function PdfThumbnail({ fileUrl }: PdfThumbnailProps) {
       const candidates = getStoragePathCandidates(fileUrl);
       const publicPath = candidates[0];
 
+      logThumbnailDebug('start', {
+        originalFileUrl: fileUrl,
+        normalizedPath: normalizeStoragePath(fileUrl),
+        candidates,
+        selectedPublicPath: publicPath,
+      });
+
       if (publicPath) {
         const { data } = supabase.storage.from('documents').getPublicUrl(publicPath);
         if (data.publicUrl) {
+          logThumbnailDebug('public url generated', {
+            fileUrl,
+            publicPath,
+            publicUrl: data.publicUrl,
+            candidates,
+          });
           setSignedUrl(data.publicUrl);
           return;
         }
       }
 
+      logThumbnailDebug('failed', { fileUrl, candidates });
       console.error('THUMBNAIL PUBLIC URL ERROR:', { fileUrl, candidates });
       setError(true);
     };
