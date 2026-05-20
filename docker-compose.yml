@@ -32,6 +32,7 @@ services:
     memswap_limit: 300m
     environment:
       - NODE_ENV=production
+      - FRONTEND_URL=${FRONTEND_URL:-http://localhost}
       - REDIS_URL=redis://redis:6379
       - SUPABASE_URL=${VITE_SUPABASE_URL}
       - SUPABASE_SERVICE_KEY=${SUPABASE_SERVICE_KEY}
