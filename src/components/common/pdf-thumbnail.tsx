@@ -10,13 +10,24 @@ interface PdfThumbnailProps {
   fileUrl: string;
 }
 
+const normalizeStoragePath = (value: string) => {
+  if (!value) return value;
+
+  return value
+    .replace(/^https?:\/\/[^/]+\/storage\/v1\/object\/(?:public|sign)\/documents\//, '')
+    .replace(/^documents\//, '')
+    .split('?')[0];
+};
+
 export function PdfThumbnail({ fileUrl }: PdfThumbnailProps) {
   const [signedUrl, setSignedUrl] = useState<string | null>(null);
   const [error, setError] = useState(false);
 
   useEffect(() => {
     const fetchUrl = async () => {
-      const { data } = await supabase.storage.from('documents').createSignedUrl(fileUrl, 3600);
+      const { data } = await supabase.storage
+        .from('documents')
+        .createSignedUrl(normalizeStoragePath(fileUrl), 3600);
       if (data?.signedUrl) {
         setSignedUrl(data.signedUrl);
       } else {

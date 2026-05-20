@@ -41,6 +41,15 @@ const fadeUp = {
   animate: { opacity: 1, y: 0 },
 };
 
+const normalizeStoragePath = (value: string) => {
+  if (!value) return value;
+
+  return value
+    .replace(/^https?:\/\/[^/]+\/storage\/v1\/object\/(?:public|sign)\/documents\//, '')
+    .replace(/^documents\//, '')
+    .split('?')[0];
+};
+
 export default function DocumentsPage() {
   const navigate = useNavigate();
   const { user } = useAuthStore();
@@ -288,8 +297,14 @@ export default function DocumentsPage() {
   const handleChat = (docId: string) => navigate(`/dashboard/chat?doc=${docId}`);
   
   const getSignedUrl = async (fileUrl: string) => {
-    const { data, error } = await supabase.storage.from('documents').createSignedUrl(fileUrl, 3600); // 1 jam
+    const path = normalizeStoragePath(fileUrl);
+
+    const { data, error } = await supabase.storage
+      .from('documents')
+      .createSignedUrl(path, 3600);
+
     if (error) {
+      console.error('SIGNED URL ERROR:', error, { fileUrl, path });
       toast.error('Gagal mengambil file.');
       return null;
     }
