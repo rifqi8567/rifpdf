@@ -3,8 +3,11 @@ import { Document, Page, pdfjs } from 'react-pdf';
 import { FileText, Loader2 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 
-// Setup worker
-pdfjs.GlobalWorkerOptions.workerSrc = `//unpkg.com/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.mjs`;
+// Keep PDF thumbnails on the same bundled worker used by the tool pages.
+pdfjs.GlobalWorkerOptions.workerSrc = new URL(
+  'pdfjs-dist/build/pdf.worker.min.mjs',
+  import.meta.url
+).toString();
 
 interface PdfThumbnailProps {
   fileUrl: string;
