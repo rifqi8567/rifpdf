@@ -58,6 +58,18 @@ const normalizeStoragePath = (value: string) => {
   }
 };
 
+const getStoragePathCandidates = (value: string) => {
+  const normalizedPath = normalizeStoragePath(value);
+  const rawPath = value.split('?')[0].replace(/^\/+/, '');
+  const candidates = [
+    normalizedPath,
+    normalizedPath ? `documents/${normalizedPath}` : '',
+    rawPath,
+  ];
+
+  return Array.from(new Set(candidates.filter(Boolean)));
+};
+
 export default function DocumentsPage() {
   const navigate = useNavigate();
   const { user } = useAuthStore();
@@ -305,18 +317,37 @@ export default function DocumentsPage() {
   const handleChat = (docId: string) => navigate(`/dashboard/chat?doc=${docId}`);
   
   const getSignedUrl = async (fileUrl: string) => {
-    const path = normalizeStoragePath(fileUrl);
+    const candidates = getStoragePathCandidates(fileUrl);
+    let lastError: unknown = null;
 
-    const { data, error } = await supabase.storage
-      .from('documents')
-      .createSignedUrl(path, 3600);
+    for (const path of candidates) {
+      const { data, error } = await supabase.storage
+        .from('documents')
+        .createSignedUrl(path, 3600);
 
-    if (error) {
-      console.error('SIGNED URL ERROR:', error, { fileUrl, path });
-      toast.error('Gagal mengambil file.');
-      return null;
+      if (data?.signedUrl) {
+        return data.signedUrl;
+      }
+
+      lastError = error;
     }
-    return data?.signedUrl;
+
+    const publicPath = candidates[0];
+    if (publicPath) {
+      const { data } = supabase.storage.from('documents').getPublicUrl(publicPath);
+      if (data.publicUrl) {
+        console.warn('SIGNED URL FALLBACK TO PUBLIC URL:', lastError, {
+          fileUrl,
+          publicPath,
+          candidates,
+        });
+        return data.publicUrl;
+      }
+    }
+
+    console.error('SIGNED URL ERROR:', lastError, { fileUrl, candidates });
+    toast.error('Gagal mengambil file.');
+    return null;
   };
 
   const handleView = async (doc: PDFDocument) => {

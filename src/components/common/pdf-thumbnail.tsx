@@ -27,22 +27,56 @@ const normalizeStoragePath = (value: string) => {
   }
 };
 
+const getStoragePathCandidates = (value: string) => {
+  const normalizedPath = normalizeStoragePath(value);
+  const rawPath = value.split('?')[0].replace(/^\/+/, '');
+  const candidates = [
+    normalizedPath,
+    normalizedPath ? `documents/${normalizedPath}` : '',
+    rawPath,
+  ];
+
+  return Array.from(new Set(candidates.filter(Boolean)));
+};
+
 export function PdfThumbnail({ fileUrl }: PdfThumbnailProps) {
   const [signedUrl, setSignedUrl] = useState<string | null>(null);
   const [error, setError] = useState(false);
 
   useEffect(() => {
     const fetchUrl = async () => {
-      const path = normalizeStoragePath(fileUrl);
-      const { data, error } = await supabase.storage
-        .from('documents')
-        .createSignedUrl(path, 3600);
-      if (data?.signedUrl) {
-        setSignedUrl(data.signedUrl);
-      } else {
-        console.error('THUMBNAIL SIGNED URL ERROR:', error, { fileUrl, path });
-        setError(true);
+      const candidates = getStoragePathCandidates(fileUrl);
+      let lastError: unknown = null;
+
+      for (const path of candidates) {
+        const { data, error } = await supabase.storage
+          .from('documents')
+          .createSignedUrl(path, 3600);
+
+        if (data?.signedUrl) {
+          setSignedUrl(data.signedUrl);
+          return;
+        }
+
+        lastError = error;
       }
+
+      const publicPath = candidates[0];
+      if (publicPath) {
+        const { data } = supabase.storage.from('documents').getPublicUrl(publicPath);
+        if (data.publicUrl) {
+          console.warn('THUMBNAIL SIGNED URL FALLBACK TO PUBLIC URL:', lastError, {
+            fileUrl,
+            publicPath,
+            candidates,
+          });
+          setSignedUrl(data.publicUrl);
+          return;
+        }
+      }
+
+      console.error('THUMBNAIL SIGNED URL ERROR:', lastError, { fileUrl, candidates });
+      setError(true);
     };
     fetchUrl();
   }, [fileUrl]);
