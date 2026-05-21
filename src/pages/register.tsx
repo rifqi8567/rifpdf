@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Logo } from '@/components/common/logo';
 import { cn } from '@/lib/utils';
+import { supabase } from '@/lib/supabase';
 
 export default function RegisterPage() {
   const [showPassword, setShowPassword] = useState(false);
@@ -21,7 +22,10 @@ export default function RegisterPage() {
     setStatus('loading');
 
     try {
-      const { supabase } = await import('@/lib/supabase');
+      if (!supabase?.auth) {
+        throw new Error('Koneksi Supabase belum siap. Muat ulang halaman lalu coba lagi.');
+      }
+
       const { error: signUpError } = await supabase.auth.signUp({
         email,
         password,

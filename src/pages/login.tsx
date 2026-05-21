@@ -5,6 +5,7 @@ import { Eye, EyeOff, Mail, Lock, ArrowRight } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Logo } from '@/components/common/logo';
+import { supabase } from '@/lib/supabase';
 
 export default function LoginPage() {
   const [showPassword, setShowPassword] = useState(false);
@@ -19,8 +20,10 @@ export default function LoginPage() {
     setLoading(true);
 
     try {
-      // Import secara dinamis atau gunakan static import jika sudah di bagian atas
-      const { supabase } = await import('@/lib/supabase');
+      if (!supabase?.auth) {
+        throw new Error('Koneksi Supabase belum siap. Muat ulang halaman lalu coba lagi.');
+      }
+
       const { error: signInError } = await supabase.auth.signInWithPassword({
         email,
         password,
