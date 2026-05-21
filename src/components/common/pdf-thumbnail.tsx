@@ -46,6 +46,38 @@ const logThumbnailDebug = (label: string, details: Record<string, unknown>) => {
   console.groupEnd();
 };
 
+const serializeError = (error: unknown) => {
+  if (error instanceof Error) {
+    return {
+      name: error.name,
+      message: error.message,
+      stack: error.stack,
+    };
+  }
+
+  return {
+    name: typeof error,
+    message: String(error),
+    raw: error,
+  };
+};
+
+const readPdfHeader = (bytes: Uint8Array) => {
+  const head = bytes.slice(0, 16);
+  const text = Array.from(head)
+    .map((byte) => (byte >= 32 && byte <= 126 ? String.fromCharCode(byte) : '.'))
+    .join('');
+  const hex = Array.from(head)
+    .map((byte) => byte.toString(16).padStart(2, '0'))
+    .join(' ');
+
+  return {
+    text,
+    hex,
+    looksLikePdf: text.startsWith('%PDF-'),
+  };
+};
+
 export function PdfThumbnail({ fileUrl }: PdfThumbnailProps) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -60,33 +92,87 @@ export function PdfThumbnail({ fileUrl }: PdfThumbnailProps) {
 
       const candidates = getStoragePathCandidates(fileUrl);
       const storagePath = candidates[0];
+      const startedAt = performance.now();
 
       logThumbnailDebug('start', {
         originalFileUrl: fileUrl,
         normalizedPath: normalizeStoragePath(fileUrl),
         candidates,
         selectedStoragePath: storagePath,
+        pdfjsVersion: pdfjs.version,
+        workerSrc: pdfjs.GlobalWorkerOptions.workerSrc,
+        userAgent: navigator.userAgent,
       });
 
       if (storagePath) {
+        logThumbnailDebug('download start', {
+          fileUrl,
+          storagePath,
+        });
+
         const { data: blob, error: downloadError } = await supabase.storage
           .from('documents')
           .download(storagePath);
 
         if (blob) {
-          logThumbnailDebug('blob url generated', {
+          logThumbnailDebug('download success', {
             fileUrl,
             storagePath,
             blobSize: blob.size,
             blobType: blob.type,
             candidates,
+            elapsedMs: Math.round(performance.now() - startedAt),
           });
 
           const buffer = await blob.arrayBuffer();
           if (cancelled) return;
 
-          const pdf = await pdfjs.getDocument({ data: new Uint8Array(buffer) }).promise;
+          const bytes = new Uint8Array(buffer);
+          const header = readPdfHeader(bytes);
+
+          logThumbnailDebug('buffer ready', {
+            fileUrl,
+            storagePath,
+            byteLength: bytes.byteLength,
+            header,
+          });
+
+          if (!header.looksLikePdf) {
+            throw new Error(`Downloaded file is not a PDF. Header: ${header.text}`);
+          }
+
+          logThumbnailDebug('pdf load start', {
+            fileUrl,
+            storagePath,
+          });
+
+          const pdf = await pdfjs.getDocument({
+            data: bytes,
+            disableFontFace: true,
+            useSystemFonts: true,
+          }).promise;
+
+          logThumbnailDebug('pdf load success', {
+            fileUrl,
+            storagePath,
+            pages: pdf.numPages,
+            elapsedMs: Math.round(performance.now() - startedAt),
+          });
+
+          logThumbnailDebug('page load start', {
+            fileUrl,
+            pageNumber: 1,
+          });
+
           const page = await pdf.getPage(1);
+
+          logThumbnailDebug('page load success', {
+            fileUrl,
+            pageNumber: 1,
+            rotate: page.rotate,
+            ref: page.ref,
+          });
+
           if (cancelled) {
             pdf.destroy();
             return;
@@ -113,18 +199,40 @@ export function PdfThumbnail({ fileUrl }: PdfThumbnailProps) {
           context.setTransform(pixelRatio, 0, 0, pixelRatio, 0, 0);
           context.clearRect(0, 0, viewport.width, viewport.height);
 
+          logThumbnailDebug('render start', {
+            fileUrl,
+            pageNumber: 1,
+            baseViewport: {
+              width: baseViewport.width,
+              height: baseViewport.height,
+            },
+            viewport: {
+              width: viewport.width,
+              height: viewport.height,
+              scale,
+            },
+            pixelRatio,
+            canvas: {
+              width: canvas.width,
+              height: canvas.height,
+              styleWidth: canvas.style.width,
+              styleHeight: canvas.style.height,
+            },
+          });
+
           await page.render({
             canvas,
-            canvasContext: context,
             viewport,
           }).promise;
 
+          const pageCount = pdf.numPages;
           pdf.destroy();
           if (cancelled) return;
 
           logThumbnailDebug('render document loaded', {
             fileUrl,
-            pages: pdf.numPages,
+            pages: pageCount,
+            elapsedMs: Math.round(performance.now() - startedAt),
           });
           setIsLoading(false);
           return;
@@ -133,7 +241,7 @@ export function PdfThumbnail({ fileUrl }: PdfThumbnailProps) {
         logThumbnailDebug('download failed', {
           fileUrl,
           storagePath,
-          error: downloadError,
+          error: serializeError(downloadError),
         });
       }
 
@@ -146,11 +254,24 @@ export function PdfThumbnail({ fileUrl }: PdfThumbnailProps) {
     };
 
     renderThumbnail().catch((renderError) => {
+      const serializedError = serializeError(renderError);
+      const message = serializedError.message;
+      const name = serializedError.name;
+
+      console.error(`[PDF Thumbnail Debug] render document failed: ${name}: ${message}`, renderError);
       logThumbnailDebug('render document failed', {
         fileUrl,
-        error: renderError,
-        message: renderError instanceof Error ? renderError.message : undefined,
-        name: renderError instanceof Error ? renderError.name : undefined,
+        error: serializedError,
+        message,
+        name,
+        canvas: canvasRef.current
+          ? {
+              width: canvasRef.current.width,
+              height: canvasRef.current.height,
+              styleWidth: canvasRef.current.style.width,
+              styleHeight: canvasRef.current.style.height,
+            }
+          : null,
       });
       if (!cancelled) {
         setError(true);
