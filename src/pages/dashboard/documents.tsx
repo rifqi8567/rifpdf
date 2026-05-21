@@ -220,6 +220,14 @@ export default function DocumentsPage() {
 
   const handleProcessUpload = async () => {
     if (uploadedFiles.length === 0 || !user) return;
+
+    const { data: authData, error: authError } = await supabase.auth.getUser();
+    if (authError || !authData.user) {
+      toast.error('Sesi login tidak valid. Silakan login ulang.');
+      return;
+    }
+
+    const authUserId = authData.user.id;
     
     setIsUploading(true);
     
@@ -227,7 +235,8 @@ export default function DocumentsPage() {
       const newDocs = [];
 
       logDocumentsDebug('upload batch start', {
-        userId: user.id,
+        userId: authUserId,
+        storeUserId: user.id,
         folderId: currentFolder ? currentFolder.id : null,
         fileCount: uploadedFiles.length,
         files: uploadedFiles.map((file) => ({
@@ -240,7 +249,7 @@ export default function DocumentsPage() {
       for (const f of uploadedFiles) {
         // Buat nama file unik: user_id/timestamp_namabersih
         const cleanName = f.name.replace(/[^a-zA-Z0-9.\-]/g, '_');
-        const filePath = `${user.id}/${Date.now()}_${cleanName}`;
+        const filePath = `${authUserId}/${Date.now()}_${cleanName}`;
 
         logDocumentsDebug('storage upload start', {
           originalName: f.name,
@@ -253,7 +262,10 @@ export default function DocumentsPage() {
         // 1. Upload file fisik ke Supabase Storage
         const { data: storageData, error: storageError } = await supabase.storage
           .from('documents')
-          .upload(filePath, f);
+          .upload(filePath, f, {
+            contentType: f.type || 'application/pdf',
+            upsert: false,
+          });
 
         logDocumentsDebug('storage upload result', {
           filePath,
@@ -265,7 +277,7 @@ export default function DocumentsPage() {
         
         // 2. Siapkan data untuk dimasukkan ke tabel documents
         newDocs.push({
-          user_id: user.id,
+          user_id: authUserId,
           folder_id: currentFolder ? currentFolder.id : null,
           name: f.name,
           file_url: filePath,
@@ -422,16 +434,25 @@ export default function DocumentsPage() {
     });
 
     if (publicPath) {
-      const { data } = supabase.storage.from('documents').getPublicUrl(publicPath);
-      if (data.publicUrl) {
+      const { data, error } = await supabase.storage
+        .from('documents')
+        .createSignedUrl(publicPath, 60 * 10);
+
+      if (data?.signedUrl) {
         logDocumentsDebug('resolve document url success', {
           fileUrl,
           publicPath,
-          publicUrl: data.publicUrl,
+          signedUrl: data.signedUrl,
           candidates,
         });
-        return data.publicUrl;
+        return data.signedUrl;
       }
+
+      logDocumentsDebug('resolve document url candidate failed', {
+        fileUrl,
+        publicPath,
+        error,
+      });
     }
 
     logDocumentsDebug('resolve document url failed', {

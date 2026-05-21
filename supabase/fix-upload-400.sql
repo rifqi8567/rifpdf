@@ -57,23 +57,43 @@ SET
   file_size_limit = EXCLUDED.file_size_limit,
   allowed_mime_types = EXCLUDED.allowed_mime_types;
 
-DO $$
-BEGIN
-  CREATE POLICY "Users can upload own files" ON storage.objects
-    FOR INSERT WITH CHECK (bucket_id = 'documents' AND auth.uid()::text = (storage.foldername(name))[1]);
-EXCEPTION WHEN duplicate_object THEN NULL;
-END $$;
+DROP POLICY IF EXISTS "Users can upload own files" ON storage.objects;
+DROP POLICY IF EXISTS "Users can view own files" ON storage.objects;
+DROP POLICY IF EXISTS "Users can update own files" ON storage.objects;
+DROP POLICY IF EXISTS "Users can delete own files" ON storage.objects;
 
-DO $$
-BEGIN
-  CREATE POLICY "Users can view own files" ON storage.objects
-    FOR SELECT USING (bucket_id = 'documents' AND auth.uid()::text = (storage.foldername(name))[1]);
-EXCEPTION WHEN duplicate_object THEN NULL;
-END $$;
+CREATE POLICY "Users can upload own files" ON storage.objects
+  FOR INSERT
+  TO authenticated
+  WITH CHECK (
+    bucket_id = 'documents'
+    AND auth.uid()::text = (storage.foldername(name))[1]
+  );
 
-DO $$
-BEGIN
-  CREATE POLICY "Users can delete own files" ON storage.objects
-    FOR DELETE USING (bucket_id = 'documents' AND auth.uid()::text = (storage.foldername(name))[1]);
-EXCEPTION WHEN duplicate_object THEN NULL;
-END $$;
+CREATE POLICY "Users can view own files" ON storage.objects
+  FOR SELECT
+  TO authenticated
+  USING (
+    bucket_id = 'documents'
+    AND auth.uid()::text = (storage.foldername(name))[1]
+  );
+
+CREATE POLICY "Users can update own files" ON storage.objects
+  FOR UPDATE
+  TO authenticated
+  USING (
+    bucket_id = 'documents'
+    AND auth.uid()::text = (storage.foldername(name))[1]
+  )
+  WITH CHECK (
+    bucket_id = 'documents'
+    AND auth.uid()::text = (storage.foldername(name))[1]
+  );
+
+CREATE POLICY "Users can delete own files" ON storage.objects
+  FOR DELETE
+  TO authenticated
+  USING (
+    bucket_id = 'documents'
+    AND auth.uid()::text = (storage.foldername(name))[1]
+  );

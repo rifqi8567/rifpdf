@@ -63,21 +63,30 @@ export function PdfThumbnail({ fileUrl }: PdfThumbnailProps) {
       });
 
       if (publicPath) {
-        const { data } = supabase.storage.from('documents').getPublicUrl(publicPath);
-        if (data.publicUrl) {
-          logThumbnailDebug('public url generated', {
+        const { data, error } = await supabase.storage
+          .from('documents')
+          .createSignedUrl(publicPath, 60 * 10);
+
+        if (data?.signedUrl) {
+          logThumbnailDebug('signed url generated', {
             fileUrl,
             publicPath,
-            publicUrl: data.publicUrl,
+            signedUrl: data.signedUrl,
             candidates,
           });
-          setSignedUrl(data.publicUrl);
+          setSignedUrl(data.signedUrl);
           return;
         }
+
+        logThumbnailDebug('signed url failed', {
+          fileUrl,
+          publicPath,
+          error,
+        });
       }
 
       logThumbnailDebug('failed', { fileUrl, candidates });
-      console.error('THUMBNAIL PUBLIC URL ERROR:', { fileUrl, candidates });
+      console.error('THUMBNAIL SIGNED URL ERROR:', { fileUrl, candidates });
       setError(true);
     };
     fetchUrl();
