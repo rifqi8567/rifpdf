@@ -430,50 +430,53 @@ export default function ToolPage() {
   }
 
   // --- SIGN CANVAS METHODS ---
+  const getSignatureCanvasPoint = (
+    e: React.MouseEvent<HTMLCanvasElement> | React.TouchEvent<HTMLCanvasElement>
+  ) => {
+    const canvas = canvasRef.current;
+    if (!canvas) return null;
+
+    const point = 'touches' in e ? e.touches[0] : e;
+    if (!point) return null;
+
+    const rect = canvas.getBoundingClientRect();
+    return {
+      x: (point.clientX - rect.left) * (canvas.width / rect.width),
+      y: (point.clientY - rect.top) * (canvas.height / rect.height),
+    };
+  };
+
   const startDrawing = (e: React.MouseEvent<HTMLCanvasElement> | React.TouchEvent<HTMLCanvasElement>) => {
+    e.preventDefault();
     const canvas = canvasRef.current;
     if (!canvas) return;
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
+    const point = getSignatureCanvasPoint(e);
+    if (!point) return;
 
     ctx.strokeStyle = signatureColor;
     ctx.lineWidth = signatureStrokeWidth;
     ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
     
-    let clientX, clientY;
-    if ('touches' in e) {
-      clientX = e.touches[0].clientX;
-      clientY = e.touches[0].clientY;
-    } else {
-      clientX = e.clientX;
-      clientY = e.clientY;
-    }
-
-    const rect = canvas.getBoundingClientRect();
     ctx.beginPath();
-    ctx.moveTo(clientX - rect.left, clientY - rect.top);
+    ctx.moveTo(point.x, point.y);
     setIsDrawing(true);
     setHasSignature(true);
   };
 
   const draw = (e: React.MouseEvent<HTMLCanvasElement> | React.TouchEvent<HTMLCanvasElement>) => {
+    e.preventDefault();
     if (!isDrawing) return;
     const canvas = canvasRef.current;
     if (!canvas) return;
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
+    const point = getSignatureCanvasPoint(e);
+    if (!point) return;
 
-    let clientX, clientY;
-    if ('touches' in e) {
-      clientX = e.touches[0].clientX;
-      clientY = e.touches[0].clientY;
-    } else {
-      clientX = e.clientX;
-      clientY = e.clientY;
-    }
-
-    const rect = canvas.getBoundingClientRect();
-    ctx.lineTo(clientX - rect.left, clientY - rect.top);
+    ctx.lineTo(point.x, point.y);
     ctx.stroke();
   };
 
