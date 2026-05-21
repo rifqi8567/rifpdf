@@ -96,14 +96,6 @@ const router = createBrowserRouter([
         ),
       },
       {
-        path: 'tools/convert',
-        element: (
-          <Suspense fallback={<PageLoader />}>
-            <ToolPage />
-          </Suspense>
-        ),
-      },
-      {
         path: 'tools/:toolId',
         element: (
           <Suspense fallback={<PageLoader />}>
