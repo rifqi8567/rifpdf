@@ -391,7 +391,7 @@ export default function ToolPage() {
   const [ocrSummary, setOcrSummary] = useState('');
 
   // Conversion Mode State
-  const [conversionType, setConversionType] = useState<'word-to-pdf' | 'excel-to-pdf' | 'ppt-to-pdf' | 'pdf-to-word'>('word-to-pdf');
+  const [conversionType, setConversionType] = useState<'word-to-pdf' | 'excel-to-pdf' | 'ppt-to-pdf'>('word-to-pdf');
 
   const tool = toolsConfig[toolId || 'merge'];
 
@@ -1738,165 +1738,11 @@ export default function ToolPage() {
     }
   };
 
-  // --- PURE CLIENT SIDE REAL PDF TEXT EXTRACTOR ---
-  const extractTextFromPdf = async (file: File): Promise<string> => {
-    try {
-      const arrayBuffer = await file.arrayBuffer();
-      const loadingTask = pdfjs.getDocument({ data: arrayBuffer });
-      const pdf = await loadingTask.promise;
-      let extractedHtml = '';
-      
-      for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
-        const page = await pdf.getPage(pageNum);
-        const textContent = await page.getTextContent();
-        const items = textContent.items as any[];
-        
-        if (items.length === 0) continue;
-
-        // Sort items: top-to-bottom (descending Y), then left-to-right (ascending X)
-        items.sort((a, b) => {
-          const yDiff = b.transform[5] - a.transform[5];
-          if (Math.abs(yDiff) < 3) return a.transform[4] - b.transform[4];
-          return yDiff;
-        });
-
-        // Group text items into lines based on Y-coordinate proximity
-        const lines: { items: any[]; y: number }[] = [];
-        let currentLine: any[] = [];
-        let currentY = items[0]?.transform[5] ?? 0;
-
-        for (const item of items) {
-          if (item.str === '' && !item.hasEOL) continue;
-          const itemY = item.transform[5];
-
-          if (currentLine.length === 0) {
-            currentLine.push(item);
-            currentY = itemY;
-          } else if (Math.abs(itemY - currentY) < 3) {
-            currentLine.push(item);
-          } else {
-            lines.push({ items: [...currentLine], y: currentY });
-            currentLine = [item];
-            currentY = itemY;
-          }
-        }
-        if (currentLine.length > 0) {
-          lines.push({ items: [...currentLine], y: currentY });
-        }
-
-        // Build HTML for this page
-        let pageHtml = '';
-        
-        for (const line of lines) {
-          // Sort items within line by X
-          line.items.sort((a, b) => a.transform[4] - b.transform[4]);
-
-          // Detect font properties from the first item in the line
-          const firstItem = line.items[0];
-          const fontSize = Math.round(Math.abs(firstItem.transform[0]));
-          const fontName: string = (firstItem.fontName || '').toLowerCase();
-          const isBold = fontName.includes('bold') || fontName.includes('black') || fontName.includes('heavy');
-          const isItalic = fontName.includes('italic') || fontName.includes('oblique');
-
-          // Reconstruct line text with spacing
-          let lineText = '';
-          for (let j = 0; j < line.items.length; j++) {
-            const item = line.items[j];
-            if (j > 0) {
-              const prev = line.items[j - 1];
-              const prevEndX = prev.transform[4] + (prev.width || 0);
-              const gap = item.transform[4] - prevEndX;
-              const charWidth = Math.abs(item.transform[0]) * 0.3;
-              
-              if (gap > charWidth * 4) {
-                lineText += '\t';
-              } else if (gap > charWidth * 0.3) {
-                lineText += ' ';
-              }
-            }
-            lineText += item.str;
-          }
-
-          if (lineText.trim() === '') continue;
-
-          // Choose appropriate HTML tag based on font size
-          const ptSize = Math.max(7, Math.min(fontSize, 36));
-          let fontWeight = isBold ? 'bold' : 'normal';
-          let fontStyle = isItalic ? 'italic' : 'normal';
-
-          // Detect heading-level text (large fonts)
-          if (fontSize >= 18) {
-            pageHtml += `<h1 style="font-size:${ptSize}pt; font-weight:${fontWeight}; font-style:${fontStyle}; margin:12px 0 6px 0; line-height:1.3;">${lineText}</h1>\n`;
-          } else if (fontSize >= 14) {
-            pageHtml += `<h2 style="font-size:${ptSize}pt; font-weight:${fontWeight}; font-style:${fontStyle}; margin:10px 0 5px 0; line-height:1.3;">${lineText}</h2>\n`;
-          } else if (fontSize >= 12 && isBold) {
-            pageHtml += `<h3 style="font-size:${ptSize}pt; font-weight:bold; font-style:${fontStyle}; margin:8px 0 4px 0; line-height:1.3;">${lineText}</h3>\n`;
-          } else {
-            // Normal paragraph
-            const textStyle = `font-size:${ptSize}pt; font-weight:${fontWeight}; font-style:${fontStyle}; margin:2px 0; line-height:1.5;`;
-            pageHtml += `<p style="${textStyle}">${lineText}</p>\n`;
-          }
-        }
-
-        // Add page break for multi-page documents
-        if (pdf.numPages > 1 && pageNum < pdf.numPages) {
-          extractedHtml += `<div style="page-break-after:always;">${pageHtml}</div>\n`;
-        } else {
-          extractedHtml += pageHtml;
-        }
-      }
-      
-      return extractedHtml;
-    } catch (error) {
-      console.error('Error extracting text:', error);
-      return '<p style="color:red;">Gagal mengekstrak teks dari PDF. Dokumen mungkin dilindungi atau berupa scan gambar.</p>';
-    }
-  };
-
   // --- 7. FILE CONVERSION ---
   const processConversion = async () => {
     const file = files[0];
     
-    if (conversionType === 'pdf-to-word') {
-      setProcessingMessage('Mengekstrak dan menyusun ulang teks dari PDF...');
-      
-      // Extract real text with formatting from the user's actual PDF
-      const realContent = await extractTextFromPdf(file);
-
-      // Generate a clean Word document that mirrors the PDF content
-      const wordContent = `<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:w="urn:schemas-microsoft-com:office:word" xmlns="http://www.w3.org/TR/REC-html40">
-<head>
-<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
-<meta name="ProgId" content="Word.Document">
-<!--[if gte mso 9]><xml><w:WordDocument><w:View>Print</w:View></w:WordDocument></xml><![endif]-->
-<style>
-  @page { margin: 2.54cm; }
-  body {
-    font-family: 'Calibri', 'Arial', sans-serif;
-    font-size: 11pt;
-    color: #222222;
-    line-height: 1.5;
-  }
-  h1 { font-family: 'Calibri', 'Arial', sans-serif; color: #1a1a1a; }
-  h2 { font-family: 'Calibri', 'Arial', sans-serif; color: #1a1a1a; }
-  h3 { font-family: 'Calibri', 'Arial', sans-serif; color: #1a1a1a; }
-  p  { font-family: 'Calibri', 'Arial', sans-serif; }
-</style>
-</head>
-<body>
-${realContent}
-</body>
-</html>`;
-      
-      // UTF-8 BOM ensures Word reads encoding correctly
-      const blob = new Blob(['\ufeff' + wordContent], { type: 'application/msword;charset=utf-8' });
-      setProcessedBlob(blob);
-      setTotalPages(1);
-      setProcessedDocName(`${file.name.replace(/\.[^/.]+$/, "")}.doc`);
-      setIsProcessing(false);
-      toast.success('Konversi PDF ke Word selesai!');
-      setShowSuccessModal(true);
-    } else if (conversionType === 'word-to-pdf') {
+    if (conversionType === 'word-to-pdf') {
       setProcessingMessage('Mengonversi file Word ke PDF via Gotenberg Engine...');
 
       // Call backend API for high fidelity Gotenberg conversion
@@ -2131,12 +1977,11 @@ ${realContent}
             {toolId === 'convert' && (
               <div className="space-y-4">
                 <label className="text-sm font-medium block">Pilih Mode Arah Konversi:</label>
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                   {[
                     { id: 'word-to-pdf', label: 'Word ke PDF', ext: '.docx' },
                     { id: 'excel-to-pdf', label: 'Excel ke PDF', ext: '.xlsx' },
                     { id: 'ppt-to-pdf', label: 'PPT ke PDF', ext: '.pptx' },
-                    { id: 'pdf-to-word', label: 'PDF ke Word', ext: '.pdf' },
                   ].map((mode) => (
                     <button
                       key={mode.id}
