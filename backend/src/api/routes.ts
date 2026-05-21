@@ -14,6 +14,7 @@ import multer from 'multer';
 import FormData from 'form-data';
 import fetch from 'node-fetch';
 import crypto from 'crypto';
+import type { NextFunction, Request, Response } from 'express';
 
 export const router = Router();
 
@@ -87,7 +88,34 @@ const upload = multer({
   }
 });
 
-const forwardOfficeConversion = async (req: any, res: any) => {
+const uploadOfficeFile = (req: Request, res: Response, next: NextFunction) => {
+  upload.single('file')(req, res, (error: any) => {
+    if (!error) {
+      return next();
+    }
+
+    const requestId = crypto.randomUUID();
+    logger.warn('Office conversion upload middleware rejected request', {
+      requestId,
+      errorName: error.name,
+      errorCode: error.code,
+      errorMessage: error.message,
+      contentType: req.headers['content-type'],
+      contentLength: req.headers['content-length'],
+      userId: req.user?.id,
+    });
+
+    const status = error instanceof multer.MulterError || error.message?.includes('Only DOCX') ? 400 : 500;
+    return res.status(status).json({
+      error: 'Upload file Office ditolak sebelum konversi.',
+      details: error.message,
+      code: error.code,
+      requestId,
+    });
+  });
+};
+
+const forwardOfficeConversion = async (req: Request, res: Response) => {
   const uploadedPath = req.file?.path;
   const requestId = crypto.randomUUID();
   try {
@@ -181,5 +209,16 @@ const forwardOfficeConversion = async (req: any, res: any) => {
   }
 };
 
-router.post('/convert/office-to-pdf', requireAuth, upload.single('file'), forwardOfficeConversion);
-router.post('/convert/word-to-pdf', requireAuth, upload.single('file'), forwardOfficeConversion);
+router.get('/convert/office-to-pdf/debug', requireAuth, (req, res) => {
+  res.json({
+    status: 'ok',
+    route: '/api/convert/office-to-pdf',
+    userId: req.user?.id,
+    conversionServiceUrl: env.CONVERSION_SERVICE_URL,
+    maxUploadBytes: 50 * 1024 * 1024,
+    supportedExtensions: ['.docx', '.xlsx', '.pptx'],
+  });
+});
+
+router.post('/convert/office-to-pdf', requireAuth, uploadOfficeFile, forwardOfficeConversion);
+router.post('/convert/word-to-pdf', requireAuth, uploadOfficeFile, forwardOfficeConversion);

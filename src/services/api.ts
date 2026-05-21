@@ -273,7 +273,13 @@ export async function convertOfficeToPdf(file: File): Promise<Blob> {
   });
 
   if (!response.ok) {
-    const payload = await response.json().catch(() => null);
+    const rawError = await response.text().catch(() => '');
+    let payload: any = null;
+    try {
+      payload = rawError ? JSON.parse(rawError) : null;
+    } catch {
+      payload = null;
+    }
     const detail = Array.isArray(payload?.detail)
       ? payload.detail.map((item: any) => item?.msg || JSON.stringify(item)).join(', ')
       : payload?.detail;
@@ -282,8 +288,9 @@ export async function convertOfficeToPdf(file: File): Promise<Blob> {
       status: response.status,
       payload,
       detail,
+      rawError: rawError.slice(0, 2000),
     });
-    throw new Error(payload?.error || detail || `Gagal mengonversi file Office ke PDF (${response.status})`);
+    throw new Error(payload?.error || detail || rawError.slice(0, 500) || `Gagal mengonversi file Office ke PDF (${response.status})`);
   }
 
   const blob = await response.blob();
