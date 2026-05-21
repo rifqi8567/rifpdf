@@ -77,6 +77,22 @@ const logDocumentsDebug = (label: string, details: Record<string, unknown>) => {
   console.groupEnd();
 };
 
+const serializeDebugError = (error: unknown) => {
+  if (error instanceof Error) {
+    return {
+      name: error.name,
+      message: error.message,
+      stack: error.stack,
+    };
+  }
+
+  return {
+    name: typeof error,
+    message: String(error),
+    raw: error,
+  };
+};
+
 export default function DocumentsPage() {
   const navigate = useNavigate();
   const { user } = useAuthStore();
@@ -477,21 +493,83 @@ export default function DocumentsPage() {
   };
 
   const handleDownload = async (doc: PDFDocument) => {
+    const startedAt = performance.now();
+    const candidates = getStoragePathCandidates(doc.file_url);
+    const storagePath = candidates[0];
+
     logDocumentsDebug('download clicked', {
       docId: doc.id,
       name: doc.name,
       file_url: doc.file_url,
       normalizedPath: normalizeStoragePath(doc.file_url),
+      candidates,
+      selectedStoragePath: storagePath,
     });
-    toast.success(`Mendownload ${doc.name}...`);
-    const url = await getSignedUrl(doc.file_url);
-    if (url) {
+
+    if (!storagePath) {
+      logDocumentsDebug('download failed', {
+        docId: doc.id,
+        reason: 'No storage path candidate found.',
+        candidates,
+      });
+      toast.error('Gagal mendownload dokumen: path file tidak valid.');
+      return;
+    }
+
+    toast.info(`Menyiapkan download ${doc.name}...`);
+
+    try {
+      logDocumentsDebug('download file start', {
+        docId: doc.id,
+        name: doc.name,
+        storagePath,
+      });
+
+      const { data: blob, error } = await supabase.storage
+        .from('documents')
+        .download(storagePath);
+
+      if (error) throw error;
+      if (!blob) throw new Error('Supabase Storage tidak mengembalikan file.');
+
+      logDocumentsDebug('download file success', {
+        docId: doc.id,
+        name: doc.name,
+        storagePath,
+        blobSize: blob.size,
+        blobType: blob.type,
+        elapsedMs: Math.round(performance.now() - startedAt),
+      });
+
+      const objectUrl = URL.createObjectURL(blob);
       const a = document.createElement('a');
-      a.href = url;
+      a.href = objectUrl;
       a.download = doc.name;
+      a.rel = 'noopener';
+      a.style.display = 'none';
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
+
+      window.setTimeout(() => URL.revokeObjectURL(objectUrl), 1000);
+
+      logDocumentsDebug('download browser handoff success', {
+        docId: doc.id,
+        name: doc.name,
+        elapsedMs: Math.round(performance.now() - startedAt),
+      });
+      toast.success(`Download ${doc.name} dimulai.`);
+    } catch (downloadError) {
+      const serializedError = serializeDebugError(downloadError);
+      console.error(`[Documents Debug] download failed: ${serializedError.name}: ${serializedError.message}`, downloadError);
+      logDocumentsDebug('download failed', {
+        docId: doc.id,
+        name: doc.name,
+        storagePath,
+        error: serializedError,
+        elapsedMs: Math.round(performance.now() - startedAt),
+      });
+      toast.error(`Gagal mendownload dokumen: ${serializedError.message}`);
     }
   };
   
