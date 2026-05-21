@@ -47,52 +47,71 @@ const logThumbnailDebug = (label: string, details: Record<string, unknown>) => {
 };
 
 export function PdfThumbnail({ fileUrl }: PdfThumbnailProps) {
-  const [signedUrl, setSignedUrl] = useState<string | null>(null);
+  const [pdfUrl, setPdfUrl] = useState<string | null>(null);
   const [error, setError] = useState(false);
 
   useEffect(() => {
-    const fetchUrl = async () => {
+    let objectUrl: string | null = null;
+    let cancelled = false;
+
+    const fetchPdf = async () => {
+      setPdfUrl(null);
+      setError(false);
+
       const candidates = getStoragePathCandidates(fileUrl);
-      const publicPath = candidates[0];
+      const storagePath = candidates[0];
 
       logThumbnailDebug('start', {
         originalFileUrl: fileUrl,
         normalizedPath: normalizeStoragePath(fileUrl),
         candidates,
-        selectedPublicPath: publicPath,
+        selectedStoragePath: storagePath,
       });
 
-      if (publicPath) {
+      if (storagePath) {
         const { data, error } = await supabase.storage
           .from('documents')
-          .createSignedUrl(publicPath, 60 * 10);
+          .download(storagePath);
 
-        if (data?.signedUrl) {
-          logThumbnailDebug('signed url generated', {
+        if (data) {
+          objectUrl = URL.createObjectURL(data);
+          if (cancelled) {
+            URL.revokeObjectURL(objectUrl);
+            return;
+          }
+
+          logThumbnailDebug('blob url generated', {
             fileUrl,
-            publicPath,
-            signedUrl: data.signedUrl,
+            storagePath,
+            blobSize: data.size,
+            blobType: data.type,
             candidates,
           });
-          setSignedUrl(data.signedUrl);
+          setPdfUrl(objectUrl);
           return;
         }
 
-        logThumbnailDebug('signed url failed', {
+        logThumbnailDebug('download failed', {
           fileUrl,
-          publicPath,
+          storagePath,
           error,
         });
       }
 
       logThumbnailDebug('failed', { fileUrl, candidates });
-      console.error('THUMBNAIL SIGNED URL ERROR:', { fileUrl, candidates });
-      setError(true);
+      console.error('THUMBNAIL DOWNLOAD ERROR:', { fileUrl, candidates });
+      if (!cancelled) setError(true);
     };
-    fetchUrl();
+
+    fetchPdf();
+
+    return () => {
+      cancelled = true;
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
+    };
   }, [fileUrl]);
 
-  if (error || !signedUrl) {
+  if (error || !pdfUrl) {
     return (
       <div className="flex h-full w-full items-center justify-center bg-surface-3">
         {error ? <FileText className="h-12 w-12 text-muted-foreground/30" /> : <Loader2 className="h-6 w-6 animate-spin text-muted-foreground/50" />}
@@ -103,7 +122,20 @@ export function PdfThumbnail({ fileUrl }: PdfThumbnailProps) {
   return (
     <div className="absolute inset-0 w-full h-full overflow-hidden bg-white/5">
       <Document
-        file={signedUrl}
+        file={pdfUrl}
+        onLoadSuccess={(pdf) => {
+          logThumbnailDebug('render document loaded', {
+            fileUrl,
+            pages: pdf.numPages,
+          });
+        }}
+        onLoadError={(loadError) => {
+          logThumbnailDebug('render document failed', {
+            fileUrl,
+            error: loadError,
+          });
+          setError(true);
+        }}
         loading={
           <div className="flex h-full w-full items-center justify-center">
             <Loader2 className="h-6 w-6 animate-spin text-muted-foreground/50" />
