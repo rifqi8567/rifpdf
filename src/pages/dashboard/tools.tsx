@@ -45,6 +45,44 @@ import { analyzeOcrText, convertWordToPdf } from '@/services/api';
 // Keep PDF rendering fully client-side without depending on an external CDN.
 pdfjs.GlobalWorkerOptions.workerSrc = '/pdf.worker.min.js';
 
+const logToolDebug = (label: string, details: Record<string, unknown>) => {
+  console.groupCollapsed(`[Tools Debug] ${label}`);
+  console.log('Details:', details);
+  console.groupEnd();
+};
+
+const serializeToolError = (error: unknown) => {
+  if (error instanceof Error) {
+    return {
+      name: error.name,
+      message: error.message,
+      stack: error.stack,
+    };
+  }
+
+  return {
+    name: typeof error,
+    message: String(error),
+    raw: error,
+  };
+};
+
+const readFileHeader = (bytes: Uint8Array) => {
+  const head = bytes.slice(0, 16);
+  const text = Array.from(head)
+    .map((byte) => (byte >= 32 && byte <= 126 ? String.fromCharCode(byte) : '.'))
+    .join('');
+  const hex = Array.from(head)
+    .map((byte) => byte.toString(16).padStart(2, '0'))
+    .join(' ');
+
+  return {
+    text,
+    hex,
+    looksLikePdf: text.startsWith('%PDF-'),
+  };
+};
+
 const toolsConfig: Record<string, { title: string; description: string; icon: React.ElementType; color: string; bg: string }> = {
   merge: { title: 'Merge PDF', description: 'Gabungkan beberapa file PDF menjadi satu dokumen', icon: Merge, color: 'text-blue-400', bg: 'from-blue-500 to-blue-600' },
   split: { title: 'Split PDF', description: 'Pisahkan halaman PDF menjadi file terpisah', icon: Scissors, color: 'text-green-400', bg: 'from-green-500 to-green-600' },
@@ -85,7 +123,7 @@ function LocalPdfPreview({ file }: { file: File }) {
 
         canvas.width = Math.ceil(viewport.width);
         canvas.height = Math.ceil(viewport.height);
-        await page.render({ canvas, canvasContext: context, viewport }).promise;
+        await page.render({ canvas, viewport }).promise;
         page.cleanup();
       } catch (error) {
         if (!cancelled) setFailed(true);
@@ -180,7 +218,7 @@ function SignPlacementPreview({
 
       canvas.width = Math.ceil(viewport.width);
       canvas.height = Math.ceil(viewport.height);
-      await page.render({ canvas, canvasContext: context, viewport }).promise;
+      await page.render({ canvas, viewport }).promise;
 
       if (!cancelled) {
         setRenderSize({ width: canvas.width, height: canvas.height });
@@ -518,12 +556,26 @@ export default function ToolPage() {
   };
 
   const downloadBlob = (blob: Blob, name: string) => {
+    const startedAt = performance.now();
+    logToolDebug('download blob start', {
+      name,
+      blobSize: blob.size,
+      blobType: blob.type,
+    });
+
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
     a.download = name;
     a.click();
-    URL.revokeObjectURL(url);
+
+    window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+
+    logToolDebug('download blob handoff success', {
+      name,
+      blobSize: blob.size,
+      elapsedMs: Math.round(performance.now() - startedAt),
+    });
   };
 
   const encryptPdfWithPassword = async (pdfBytes: Uint8Array, password: string) => {
@@ -819,7 +871,7 @@ export default function ToolPage() {
 
         canvas.width = Math.ceil(viewport.width);
         canvas.height = Math.ceil(viewport.height);
-        await renderPage.render({ canvas, canvasContext: context, viewport }).promise;
+        await renderPage.render({ canvas, viewport }).promise;
 
         const jpegBlob = await new Promise<Blob>((resolve, reject) => {
           canvas.toBlob((blob) => {
@@ -1149,7 +1201,7 @@ export default function ToolPage() {
     canvas.height = Math.ceil(viewport.height);
     context.fillStyle = '#ffffff';
     context.fillRect(0, 0, canvas.width, canvas.height);
-    await page.render({ canvas, canvasContext: context, viewport }).promise;
+    await page.render({ canvas, viewport }).promise;
     enhanceCanvasForOcr(canvas);
 
     return canvas;
@@ -1525,47 +1577,169 @@ export default function ToolPage() {
   const processPdfToJpg = async () => {
     setProcessingMessage('Merender halaman PDF menjadi JPG...');
     const file = files[0];
-    const arrayBuffer = await file.arrayBuffer();
-    const loadingTask = pdfjs.getDocument({ data: arrayBuffer.slice(0) });
-    const pdf = await loadingTask.promise;
-    const zip = new JSZip();
+    const startedAt = performance.now();
     const baseName = file.name.replace(/\.[^/.]+$/, '') || 'document';
+    let loadingTask: ReturnType<typeof pdfjs.getDocument> | null = null;
 
-    for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
-      setProcessingMessage(`Merender halaman ${pageNum}/${pdf.numPages}...`);
-      const page = await pdf.getPage(pageNum);
-      const viewport = page.getViewport({ scale: 2 });
-      const canvas = document.createElement('canvas');
-      const context = canvas.getContext('2d');
+    logToolDebug('pdf-to-jpg start', {
+      fileName: file.name,
+      fileType: file.type,
+      fileSize: file.size,
+      jpgQuality,
+      pdfjsVersion: pdfjs.version,
+      workerSrc: pdfjs.GlobalWorkerOptions.workerSrc,
+      userAgent: navigator.userAgent,
+    });
 
-      if (!context) {
-        throw new Error('Canvas browser tidak tersedia.');
-      }
-
-      canvas.width = Math.ceil(viewport.width);
-      canvas.height = Math.ceil(viewport.height);
-      await page.render({ canvas, canvasContext: context, viewport }).promise;
-
-      const jpgBlob = await new Promise<Blob>((resolve, reject) => {
-        canvas.toBlob((blob) => {
-          if (blob) resolve(blob);
-          else reject(new Error('Gagal membuat JPG dari halaman PDF.'));
-        }, 'image/jpeg', jpgQuality);
+    try {
+      logToolDebug('pdf-to-jpg read file start', {
+        fileName: file.name,
       });
 
-      zip.file(`${baseName}_page_${String(pageNum).padStart(3, '0')}.jpg`, jpgBlob);
-      page.cleanup();
-      canvas.width = 0;
-      canvas.height = 0;
-    }
+      const arrayBuffer = await file.arrayBuffer();
+      const bytes = new Uint8Array(arrayBuffer);
+      const header = readFileHeader(bytes);
 
-    const zipBlob = await zip.generateAsync({ type: 'blob', compression: 'DEFLATE' });
-    completeProcessing(
-      zipBlob,
-      `${baseName}_jpg_pages.zip`,
-      pdf.numPages,
-      'PDF berhasil diubah menjadi JPG!'
-    );
+      logToolDebug('pdf-to-jpg read file success', {
+        fileName: file.name,
+        byteLength: bytes.byteLength,
+        header,
+        elapsedMs: Math.round(performance.now() - startedAt),
+      });
+
+      if (!header.looksLikePdf) {
+        throw new Error(`File yang dipilih bukan PDF valid. Header: ${header.text}`);
+      }
+
+      logToolDebug('pdf-to-jpg load pdf start', {
+        fileName: file.name,
+      });
+
+      loadingTask = pdfjs.getDocument({
+        data: arrayBuffer.slice(0),
+        disableFontFace: true,
+        useSystemFonts: true,
+      });
+      const pdf = await loadingTask.promise;
+
+      logToolDebug('pdf-to-jpg load pdf success', {
+        fileName: file.name,
+        pageCount: pdf.numPages,
+        elapsedMs: Math.round(performance.now() - startedAt),
+      });
+
+      const zip = new JSZip();
+
+      for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
+        setProcessingMessage(`Merender halaman ${pageNum}/${pdf.numPages}...`);
+
+        logToolDebug('pdf-to-jpg page start', {
+          fileName: file.name,
+          pageNum,
+          pageCount: pdf.numPages,
+        });
+
+        const page = await pdf.getPage(pageNum);
+        const viewport = page.getViewport({ scale: 2 });
+        const canvas = document.createElement('canvas');
+        const context = canvas.getContext('2d');
+
+        if (!context) {
+          throw new Error('Canvas browser tidak tersedia.');
+        }
+
+        canvas.width = Math.ceil(viewport.width);
+        canvas.height = Math.ceil(viewport.height);
+
+        logToolDebug('pdf-to-jpg render start', {
+          fileName: file.name,
+          pageNum,
+          viewport: {
+            width: viewport.width,
+            height: viewport.height,
+          },
+          canvas: {
+            width: canvas.width,
+            height: canvas.height,
+          },
+        });
+
+        await page.render({ canvas, viewport }).promise;
+
+        logToolDebug('pdf-to-jpg render success', {
+          fileName: file.name,
+          pageNum,
+          elapsedMs: Math.round(performance.now() - startedAt),
+        });
+
+        const jpgBlob = await new Promise<Blob>((resolve, reject) => {
+          canvas.toBlob((blob) => {
+            if (blob) resolve(blob);
+            else reject(new Error('Gagal membuat JPG dari halaman PDF.'));
+          }, 'image/jpeg', jpgQuality);
+        });
+
+        const jpgName = `${baseName}_page_${String(pageNum).padStart(3, '0')}.jpg`;
+        zip.file(jpgName, jpgBlob);
+
+        logToolDebug('pdf-to-jpg page encoded', {
+          fileName: file.name,
+          pageNum,
+          jpgName,
+          jpgSize: jpgBlob.size,
+          jpgType: jpgBlob.type,
+          elapsedMs: Math.round(performance.now() - startedAt),
+        });
+
+        page.cleanup();
+        canvas.width = 0;
+        canvas.height = 0;
+      }
+
+      setProcessingMessage('Membuat file ZIP JPG...');
+      logToolDebug('pdf-to-jpg zip start', {
+        fileName: file.name,
+        pageCount: pdf.numPages,
+      });
+
+      const zipBlob = await zip.generateAsync(
+        { type: 'blob', compression: 'DEFLATE' },
+        (metadata) => {
+          if (metadata.percent === 100 || Math.round(metadata.percent) % 25 === 0) {
+            logToolDebug('pdf-to-jpg zip progress', {
+              percent: Math.round(metadata.percent),
+              currentFile: metadata.currentFile,
+            });
+          }
+        }
+      );
+
+      logToolDebug('pdf-to-jpg complete', {
+        fileName: file.name,
+        outputName: `${baseName}_jpg_pages.zip`,
+        zipSize: zipBlob.size,
+        pageCount: pdf.numPages,
+        elapsedMs: Math.round(performance.now() - startedAt),
+      });
+
+      completeProcessing(
+        zipBlob,
+        `${baseName}_jpg_pages.zip`,
+        pdf.numPages,
+        'PDF berhasil diubah menjadi JPG!'
+      );
+    } catch (error) {
+      const serializedError = serializeToolError(error);
+      console.error(`[Tools Debug] pdf-to-jpg failed: ${serializedError.name}: ${serializedError.message}`, error);
+      logToolDebug('pdf-to-jpg failed', {
+        fileName: file.name,
+        error: serializedError,
+        elapsedMs: Math.round(performance.now() - startedAt),
+      });
+      throw error;
+    } finally {
+      loadingTask?.destroy();
+    }
   };
 
   // --- PURE CLIENT SIDE REAL PDF TEXT EXTRACTOR ---

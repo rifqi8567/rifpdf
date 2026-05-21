@@ -3,6 +3,7 @@ import {
   ArrowUpRight,
   Clock,
   FileText,
+  FileImage,
   Loader2,
   MessageSquare,
   ScanLine,
@@ -34,6 +35,7 @@ const quickActions = [
   { label: 'Upload PDF', icon: Upload, href: '/dashboard/documents', color: 'from-blue-500 to-blue-600' },
   { label: 'AI Chat', icon: MessageSquare, href: '/dashboard/chat', color: 'from-purple-500 to-purple-600' },
   { label: 'Merge PDF', icon: FileText, href: '/dashboard/tools/merge', color: 'from-orange-500 to-orange-600' },
+  { label: 'PDF to JPG', icon: FileImage, href: '/dashboard/tools/pdf-to-jpg', color: 'from-amber-500 to-amber-600' },
   { label: 'OCR AI', icon: ScanLine, href: '/dashboard/tools/ocr', color: 'from-green-500 to-green-600' },
 ];
 
@@ -215,7 +217,7 @@ export default function DashboardPage() {
 
       <motion.div initial="initial" animate="animate" variants={stagger}>
         <h2 className="text-lg font-semibold mb-3">Aksi Cepat</h2>
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
           {quickActions.map((action) => (
             <motion.div key={action.label} variants={fadeUp}>
               <Link to={action.href}>

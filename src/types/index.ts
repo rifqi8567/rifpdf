@@ -93,6 +93,7 @@ export type PDFToolType =
   | 'ocr'
   | 'image-to-pdf'
   | 'pdf-to-image'
+  | 'pdf-to-jpg'
   | 'word-to-pdf'
   | 'excel-to-pdf'
   | 'ppt-to-pdf';
