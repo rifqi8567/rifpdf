@@ -1,10 +1,18 @@
 import { Router } from 'express';
 import { Queue } from 'bullmq';
+import fs from 'fs';
+import os from 'os';
+import path from 'path';
 import { redisConnection } from '../config/redis';
 import { DOCUMENT_PROCESSING_QUEUE } from '../queues/document';
 import { OllamaService } from '../services/ollama';
 import { requireAuth } from '../middleware/auth';
 import { supabaseAdmin } from '../core/supabase';
+import { env } from '../config/env';
+import { logger } from '../config/logger';
+import multer from 'multer';
+import FormData from 'form-data';
+import fetch from 'node-fetch';
 
 export const router = Router();
 
@@ -57,48 +65,65 @@ router.post('/documents/process', requireAuth, async (req, res) => {
   res.json({ message: 'Document added to processing queue', jobId: job.id });
 });
 
-// Gotenberg High Fidelity Word to PDF Conversion Route
-import multer from 'multer';
-import FormData from 'form-data';
-import fetch from 'node-fetch';
-
 const upload = multer({
-  storage: multer.memoryStorage(),
+  storage: multer.diskStorage({
+    destination: (_req, _file, cb) => cb(null, os.tmpdir()),
+    filename: (_req, file, cb) => {
+      const safeExt = path.extname(file.originalname).toLowerCase();
+      cb(null, `office-upload-${Date.now()}-${Math.random().toString(16).slice(2)}${safeExt}`);
+    },
+  }),
   limits: {
-    fileSize: 100 * 1024 * 1024, // 100MB max
+    fileSize: 50 * 1024 * 1024,
+    files: 1,
+  },
+  fileFilter: (_req, file, cb) => {
+    const ext = path.extname(file.originalname).toLowerCase();
+    if (!['.docx', '.xlsx', '.pptx'].includes(ext)) {
+      return cb(new Error('Only DOCX, XLSX, and PPTX files are supported'));
+    }
+    cb(null, true);
   }
 });
 
-router.post('/convert/word-to-pdf', requireAuth, upload.single('file'), async (req, res) => {
+const forwardOfficeConversion = async (req: any, res: any) => {
+  const uploadedPath = req.file?.path;
   try {
     if (!req.file) {
       return res.status(400).json({ error: 'Tidak ada file yang diunggah.' });
     }
 
     const form = new FormData();
-    form.append('files', req.file.buffer, {
+    form.append('file', fs.createReadStream(req.file.path), {
       filename: req.file.originalname,
       contentType: req.file.mimetype,
     });
 
-    const gotenbergUrl = process.env.GOTENBERG_URL || 'http://gotenberg:3000';
-    const response = await fetch(`${gotenbergUrl}/forms/libreoffice/convert`, {
+    const response = await fetch(`${env.CONVERSION_SERVICE_URL}/v1/conversions/sync`, {
       method: 'POST',
       body: form,
       headers: form.getHeaders(),
+      timeout: 150_000,
     });
 
     if (!response.ok) {
       const errText = await response.text().catch(() => 'Unknown error');
-      throw new Error(`Gotenberg error (${response.status}): ${errText}`);
+      throw new Error(`Conversion service error (${response.status}): ${errText}`);
     }
 
     const pdfBuffer = await response.buffer();
-
     res.setHeader('Content-Type', 'application/pdf');
     res.setHeader('Content-Disposition', `attachment; filename="${req.file.originalname.replace(/\.[^/.]+$/, '')}.pdf"`);
     res.send(pdfBuffer);
   } catch (error: any) {
+    logger.error('Office conversion failed:', error);
     res.status(500).json({ error: `Gagal mengonversi file: ${error.message}` });
+  } finally {
+    if (uploadedPath) {
+      fs.promises.unlink(uploadedPath).catch(() => undefined);
+    }
   }
-});
+};
+
+router.post('/convert/office-to-pdf', requireAuth, upload.single('file'), forwardOfficeConversion);
+router.post('/convert/word-to-pdf', requireAuth, upload.single('file'), forwardOfficeConversion);

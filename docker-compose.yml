@@ -45,9 +45,11 @@ services:
       - CLEANUP_RETENTION_HOURS=${CLEANUP_RETENTION_HOURS:-24}
       - CLEANUP_BATCH_SIZE=${CLEANUP_BATCH_SIZE:-100}
       - TMP_CLEANUP_DIR=/tmp/documind
-      - GOTENBERG_URL=http://gotenberg:3000
+      - CONVERSION_SERVICE_URL=http://conversion-api:8000
     depends_on:
       redis:
+        condition: service_healthy
+      conversion-api:
         condition: service_healthy
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://localhost:3000/api/health"]
@@ -107,15 +109,56 @@ services:
       timeout: 3s
       retries: 5
 
-  # 5. Gotenberg (Office to PDF High Fidelity Engine)
-  gotenberg:
-    image: gotenberg/gotenberg:8
-    container_name: documind-gotenberg
+  # 5. Python Office Conversion API (upload/status/download control plane)
+  conversion-api:
+    build:
+      context: ./conversion-service
+      dockerfile: Dockerfile
+    container_name: documind-conversion-api
     restart: unless-stopped
     expose:
-      - "3000"
-    mem_limit: 200m
-    memswap_limit: 200m
+      - "8000"
+    environment:
+      - CONVERSION_REDIS_URL=redis://redis:6379/1
+      - CONVERSION_DATA_DIR=/data/conversions
+      - CONVERSION_MAX_UPLOAD_MB=${CONVERSION_MAX_UPLOAD_MB:-50}
+      - CONVERSION_CONVERSION_TIMEOUT_SECONDS=${CONVERSION_TIMEOUT_SECONDS:-120}
+      - CONVERSION_CLEANUP_RETENTION_HOURS=${CONVERSION_CLEANUP_RETENTION_HOURS:-24}
+    volumes:
+      - conversion_data:/data/conversions
+    depends_on:
+      redis:
+        condition: service_healthy
+    mem_limit: 180m
+    memswap_limit: 180m
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health', timeout=3).read()"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+  # 6. Python LibreOffice Worker (single conversion at a time for 2GB VPS)
+  conversion-worker:
+    build:
+      context: ./conversion-service
+      dockerfile: Dockerfile
+    command: python worker.py
+    container_name: documind-conversion-worker
+    restart: on-failure
+    environment:
+      - CONVERSION_REDIS_URL=redis://redis:6379/1
+      - CONVERSION_DATA_DIR=/data/conversions
+      - CONVERSION_MAX_UPLOAD_MB=${CONVERSION_MAX_UPLOAD_MB:-50}
+      - CONVERSION_CONVERSION_TIMEOUT_SECONDS=${CONVERSION_TIMEOUT_SECONDS:-120}
+      - CONVERSION_CLEANUP_RETENTION_HOURS=${CONVERSION_CLEANUP_RETENTION_HOURS:-24}
+    volumes:
+      - conversion_data:/data/conversions
+    depends_on:
+      redis:
+        condition: service_healthy
+    mem_limit: 700m
+    memswap_limit: 700m
 
 volumes:
   redis_data:
+  conversion_data:

@@ -241,15 +241,15 @@ export async function deleteDocument(id: string, filePath: string) {
 }
 
 /**
- * Convert a Word document (.docx) to PDF using the backend Gotenberg engine.
+ * Convert an Office document (.docx, .xlsx, .pptx) to PDF using the Python LibreOffice service.
  */
-export async function convertWordToPdf(file: File): Promise<Blob> {
+export async function convertOfficeToPdf(file: File): Promise<Blob> {
   const { data: { session } } = await supabase.auth.getSession();
 
   const formData = new FormData();
   formData.append('file', file);
 
-  const response = await fetch(buildApiUrl('/api/convert/word-to-pdf'), {
+  const response = await fetch(buildApiUrl('/api/convert/office-to-pdf'), {
     method: 'POST',
     headers: {
       ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {})
@@ -259,8 +259,10 @@ export async function convertWordToPdf(file: File): Promise<Blob> {
 
   if (!response.ok) {
     const payload = await response.json().catch(() => null);
-    throw new Error(payload?.error || 'Gagal mengonversi file Word ke PDF');
+    throw new Error(payload?.error || 'Gagal mengonversi file Office ke PDF');
   }
 
   return response.blob();
 }
+
+export const convertWordToPdf = convertOfficeToPdf;

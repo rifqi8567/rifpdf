@@ -40,7 +40,7 @@ import { createWorker, PSM } from 'tesseract.js';
 import { supabase } from '@/lib/supabase';
 import { useAuthStore } from '@/store/auth-store';
 import { toast } from 'sonner';
-import { analyzeOcrText, convertWordToPdf } from '@/services/api';
+import { analyzeOcrText, convertOfficeToPdf } from '@/services/api';
 
 // Keep PDF rendering fully client-side without depending on an external CDN.
 pdfjs.GlobalWorkerOptions.workerSrc = '/pdf.worker.min.js';
@@ -1745,11 +1745,11 @@ export default function ToolPage() {
   const processConversion = async () => {
     const file = files[0];
     
-    if (conversionType === 'word-to-pdf') {
-      setProcessingMessage('Mengonversi file Word ke PDF via Gotenberg Engine...');
+    if (['word-to-pdf', 'excel-to-pdf', 'ppt-to-pdf'].includes(conversionType)) {
+      const label = conversionType === 'word-to-pdf' ? 'Word' : conversionType === 'excel-to-pdf' ? 'Excel' : 'PowerPoint';
+      setProcessingMessage(`Mengonversi file ${label} ke PDF...`);
 
-      // Call backend API for high fidelity Gotenberg conversion
-      const outputBlob = await convertWordToPdf(file);
+      const outputBlob = await convertOfficeToPdf(file);
       
       // Load PDF to get the page count
       const arrayBuffer = await outputBlob.arrayBuffer();
@@ -1763,18 +1763,16 @@ export default function ToolPage() {
       setTotalPages(pageCount);
       setProcessedDocName(outputName);
       setIsProcessing(false);
-      toast.success('Konversi Word ke PDF berhasil!');
+      toast.success(`Konversi ${label} ke PDF berhasil!`);
       navigate(`/dashboard/tools/${toolId}/preview`, {
         state: {
           blob: outputBlob,
           name: outputName,
           sourceTool: toolId,
-          sourceLabel: 'Preview Hasil Word ke PDF',
+          sourceLabel: `Preview Hasil ${label} ke PDF`,
         },
       });
     } else {
-      // Excel / PPT to PDF - these formats need server-side engines for full fidelity
-      toast.info('Konversi Excel/PPT ke PDF membutuhkan pemrosesan server. Fitur ini akan segera hadir!');
       setIsProcessing(false);
     }
   };

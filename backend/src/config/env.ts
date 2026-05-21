@@ -17,6 +17,7 @@ const envSchema = z.object({
   CLEANUP_RETENTION_HOURS: z.coerce.number().int().positive().default(24),
   CLEANUP_BATCH_SIZE: z.coerce.number().int().positive().max(500).default(100),
   TMP_CLEANUP_DIR: z.string().default('/tmp/documind'),
+  CONVERSION_SERVICE_URL: z.string().url().default('http://conversion-api:8000'),
 });
 
 const _env = envSchema.safeParse(process.env);
