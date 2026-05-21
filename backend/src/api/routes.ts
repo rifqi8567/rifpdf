@@ -13,6 +13,7 @@ import { logger } from '../config/logger';
 import multer from 'multer';
 import FormData from 'form-data';
 import fetch from 'node-fetch';
+import crypto from 'crypto';
 
 export const router = Router();
 
@@ -88,10 +89,27 @@ const upload = multer({
 
 const forwardOfficeConversion = async (req: any, res: any) => {
   const uploadedPath = req.file?.path;
+  const requestId = crypto.randomUUID();
   try {
     if (!req.file) {
+      logger.warn('Office conversion rejected: missing upload', {
+        requestId,
+        userId: req.user?.id,
+        contentType: req.headers['content-type'],
+        contentLength: req.headers['content-length'],
+      });
       return res.status(400).json({ error: 'Tidak ada file yang diunggah.' });
     }
+
+    logger.info('Office conversion upload accepted', {
+      requestId,
+      userId: req.user?.id,
+      originalName: req.file.originalname,
+      mimetype: req.file.mimetype,
+      size: req.file.size,
+      tempPath: req.file.path,
+      conversionServiceUrl: env.CONVERSION_SERVICE_URL,
+    });
 
     const form = new FormData();
     form.append('file', fs.createReadStream(req.file.path), {
@@ -99,28 +117,66 @@ const forwardOfficeConversion = async (req: any, res: any) => {
       contentType: req.file.mimetype,
     });
 
+    const startedAt = Date.now();
     const response = await fetch(`${env.CONVERSION_SERVICE_URL}/v1/conversions/sync`, {
       method: 'POST',
       body: form,
-      headers: form.getHeaders(),
+      headers: {
+        ...form.getHeaders(),
+        'x-request-id': requestId,
+      },
       timeout: 150_000,
+    });
+
+    logger.info('Office conversion service responded', {
+      requestId,
+      status: response.status,
+      statusText: response.statusText,
+      durationMs: Date.now() - startedAt,
+      contentType: response.headers.get('content-type'),
     });
 
     if (!response.ok) {
       const errText = await response.text().catch(() => 'Unknown error');
-      throw new Error(`Conversion service error (${response.status}): ${errText}`);
+      logger.warn(`Conversion service returned ${response.status}: ${errText}`, {
+        requestId,
+        originalName: req.file.originalname,
+        size: req.file.size,
+      });
+      res.status(response.status).type('application/json').send(errText);
+      return;
     }
 
     const pdfBuffer = await response.buffer();
+    logger.info('Office conversion completed', {
+      requestId,
+      originalName: req.file.originalname,
+      outputBytes: pdfBuffer.length,
+      durationMs: Date.now() - startedAt,
+    });
     res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('X-Conversion-Request-Id', requestId);
     res.setHeader('Content-Disposition', `attachment; filename="${req.file.originalname.replace(/\.[^/.]+$/, '')}.pdf"`);
     res.send(pdfBuffer);
   } catch (error: any) {
-    logger.error('Office conversion failed:', error);
+    logger.error('Office conversion failed:', {
+      requestId,
+      errorMessage: error.message,
+      errorStack: error.stack,
+      originalName: req.file?.originalname,
+      size: req.file?.size,
+      conversionServiceUrl: env.CONVERSION_SERVICE_URL,
+    });
     res.status(500).json({ error: `Gagal mengonversi file: ${error.message}` });
   } finally {
     if (uploadedPath) {
-      fs.promises.unlink(uploadedPath).catch(() => undefined);
+      fs.promises.unlink(uploadedPath).catch((error) => {
+        logger.warn('Failed to remove temporary office upload', {
+          requestId,
+          uploadedPath,
+          errorMessage: error.message,
+        });
+      });
     }
   }
 };

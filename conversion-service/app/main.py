@@ -1,4 +1,5 @@
 import asyncio
+import logging
 import shutil
 import time
 import uuid
@@ -11,8 +12,12 @@ from rq import Queue
 from rq.job import Job
 
 from .converter import conversion_job, validate_office_file
+from .logging_config import configure_logging
 from .settings import get_settings
 from .storage import read_job_meta, write_job_meta
+
+configure_logging()
+logger = logging.getLogger("conversion.api")
 
 settings = get_settings()
 redis = Redis.from_url(settings.redis_url)
@@ -41,9 +46,19 @@ async def persist_upload(file: UploadFile, job_id: str, extension: str) -> Path:
                 raise HTTPException(status_code=413, detail=f"File exceeds {settings.max_upload_mb}MB limit")
             handle.write(chunk)
 
+    logger.info(
+        "upload_persisted job_id=%s filename=%s content_type=%s size=%s extension=%s",
+        job_id,
+        file.filename,
+        file.content_type,
+        written,
+        extension,
+    )
+
     try:
         validate_office_file(target, extension)
     except Exception as exc:
+        logger.warning("upload_validation_failed job_id=%s filename=%s error=%s", job_id, file.filename, exc)
         target.unlink(missing_ok=True)
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
@@ -68,6 +83,7 @@ async def create_conversion(file: UploadFile = File(...)) -> dict[str, str]:
     job_id = uuid.uuid4().hex
     extension = extension_from_name(file.filename)
     source_path = await persist_upload(file, job_id, extension)
+    logger.info("async_conversion_queued job_id=%s filename=%s", job_id, file.filename)
 
     write_job_meta(
         job_id,
@@ -132,6 +148,7 @@ async def convert_sync(file: UploadFile = File(...)) -> FileResponse:
     job_id = uuid.uuid4().hex
     extension = extension_from_name(file.filename)
     source_path = await persist_upload(file, job_id, extension)
+    logger.info("sync_conversion_queued job_id=%s filename=%s", job_id, file.filename)
     write_job_meta(
         job_id,
         job_id=job_id,
@@ -157,11 +174,14 @@ async def convert_sync(file: UploadFile = File(...)) -> FileResponse:
     while time.time() < deadline:
         meta = read_job_meta(job_id)
         if meta and meta.get("status") == "completed":
+            logger.info("sync_conversion_completed job_id=%s", job_id)
             return FileResponse(Path(str(meta["output_path"])), media_type="application/pdf", filename=str(meta["filename"]))
         if meta and meta.get("status") == "failed":
+            logger.warning("sync_conversion_failed job_id=%s error=%s", job_id, meta.get("error"))
             raise HTTPException(status_code=422, detail=f"Conversion failed: {str(meta.get('error', 'unknown'))[:1000]}")
         await asyncio.sleep(0.5)
 
+    logger.warning("sync_conversion_timeout job_id=%s timeout_seconds=%s", job_id, settings.conversion_timeout_seconds + 30)
     write_job_meta(job_id, status="failed", error="Gateway timed out waiting for conversion worker")
     raise HTTPException(status_code=504, detail="Conversion timed out")
 

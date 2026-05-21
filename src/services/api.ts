@@ -249,6 +249,15 @@ export async function convertOfficeToPdf(file: File): Promise<Blob> {
   const formData = new FormData();
   formData.append('file', file);
 
+  const debugPayload = {
+    fileName: file.name,
+    fileType: file.type,
+    fileSize: file.size,
+    hasSession: Boolean(session?.access_token),
+    endpoint: buildApiUrl('/api/convert/office-to-pdf'),
+  };
+  console.info('[office-conversion] request', debugPayload);
+
   const response = await fetch(buildApiUrl('/api/convert/office-to-pdf'), {
     method: 'POST',
     headers: {
@@ -257,12 +266,33 @@ export async function convertOfficeToPdf(file: File): Promise<Blob> {
     body: formData,
   });
 
+  console.info('[office-conversion] response', {
+    status: response.status,
+    statusText: response.statusText,
+    contentType: response.headers.get('content-type'),
+  });
+
   if (!response.ok) {
     const payload = await response.json().catch(() => null);
-    throw new Error(payload?.error || 'Gagal mengonversi file Office ke PDF');
+    const detail = Array.isArray(payload?.detail)
+      ? payload.detail.map((item: any) => item?.msg || JSON.stringify(item)).join(', ')
+      : payload?.detail;
+    console.error('[office-conversion] failed', {
+      ...debugPayload,
+      status: response.status,
+      payload,
+      detail,
+    });
+    throw new Error(payload?.error || detail || `Gagal mengonversi file Office ke PDF (${response.status})`);
   }
 
-  return response.blob();
+  const blob = await response.blob();
+  console.info('[office-conversion] completed', {
+    fileName: file.name,
+    outputType: blob.type,
+    outputSize: blob.size,
+  });
+  return blob;
 }
 
 export const convertWordToPdf = convertOfficeToPdf;

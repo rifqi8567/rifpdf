@@ -1,4 +1,5 @@
 import os
+import logging
 import shutil
 import subprocess
 import time
@@ -8,12 +9,15 @@ from pathlib import Path
 from .settings import get_settings
 from .storage import write_job_meta
 
+logger = logging.getLogger("conversion.converter")
+
 
 class ConversionError(RuntimeError):
     pass
 
 
 def validate_office_file(path: Path, extension: str) -> None:
+    logger.info("validating_office_file path=%s extension=%s size=%s", path, extension, path.stat().st_size if path.exists() else "missing")
     if extension not in get_settings().allowed_extensions:
         raise ConversionError(f"Unsupported extension: {extension}")
     if not zipfile.is_zipfile(path):
@@ -24,6 +28,13 @@ def convert_to_pdf(job_id: str, input_path: str, original_filename: str, extensi
     settings = get_settings()
     source = Path(input_path)
     validate_office_file(source, extension)
+    logger.info(
+        "conversion_started job_id=%s extension=%s original_filename=%s input_size=%s",
+        job_id,
+        extension,
+        original_filename,
+        source.stat().st_size,
+    )
 
     work_dir = settings.tmp_dir / job_id
     out_dir = work_dir / "out"
@@ -70,14 +81,23 @@ def convert_to_pdf(job_id: str, input_path: str, original_filename: str, extensi
             check=False,
         )
     except subprocess.TimeoutExpired as exc:
+        logger.exception("libreoffice_timeout job_id=%s timeout_seconds=%s", job_id, settings.conversion_timeout_seconds)
         raise ConversionError(f"LibreOffice timed out after {settings.conversion_timeout_seconds}s") from exc
 
     if completed.returncode != 0:
         stderr = (completed.stderr or completed.stdout or "unknown LibreOffice error").strip()
+        logger.error(
+            "libreoffice_failed job_id=%s returncode=%s stdout=%s stderr=%s",
+            job_id,
+            completed.returncode,
+            (completed.stdout or "")[:1000],
+            (completed.stderr or "")[:1000],
+        )
         raise ConversionError(stderr[:2000])
 
     produced = list(out_dir.glob("*.pdf"))
     if not produced:
+        logger.error("libreoffice_no_output job_id=%s stdout=%s stderr=%s", job_id, completed.stdout[:1000], completed.stderr[:1000])
         raise ConversionError("LibreOffice finished without producing a PDF")
 
     output_name = f"{job_id}.pdf"
@@ -93,6 +113,12 @@ def convert_to_pdf(job_id: str, input_path: str, original_filename: str, extensi
         "duration_ms": int((time.time() - started) * 1000),
     }
     write_job_meta(job_id, **result)
+    logger.info(
+        "conversion_completed job_id=%s output_size=%s duration_ms=%s",
+        job_id,
+        result["size_bytes"],
+        result["duration_ms"],
+    )
     shutil.rmtree(work_dir, ignore_errors=True)
     return result
 
@@ -101,5 +127,6 @@ def conversion_job(job_id: str, input_path: str, original_filename: str, extensi
     try:
         return convert_to_pdf(job_id, input_path, original_filename, extension)
     except Exception as exc:
+        logger.exception("conversion_failed job_id=%s error=%s", job_id, exc)
         write_job_meta(job_id, status="failed", error=str(exc)[:2000])
         raise
