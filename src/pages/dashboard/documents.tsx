@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAuthStore } from '@/store/auth-store';
-import { configuredSupabaseUrl, supabase } from '@/lib/supabase';
+import { supabase } from '@/lib/supabase';
 import { toast } from 'sonner';
 import type { PDFDocument } from '@/types';
 import {
@@ -70,12 +70,7 @@ const getStoragePathCandidates = (value: string) => {
   return Array.from(new Set(candidates.filter(Boolean)));
 };
 
-const logDocumentsDebug = (label: string, details: Record<string, unknown>) => {
-  console.groupCollapsed(`[Documents Debug] ${label}`);
-  console.log('Supabase URL:', configuredSupabaseUrl);
-  console.log('Details:', details);
-  console.groupEnd();
-};
+const logDocumentsDebug = (_label: string, _details: Record<string, unknown>) => undefined;
 
 const serializeDebugError = (error: unknown) => {
   if (error instanceof Error) {
@@ -561,7 +556,7 @@ export default function DocumentsPage() {
       toast.success(`Download ${doc.name} dimulai.`);
     } catch (downloadError) {
       const serializedError = serializeDebugError(downloadError);
-      console.error(`[Documents Debug] download failed: ${serializedError.name}: ${serializedError.message}`, downloadError);
+      console.error('Download failed:', downloadError);
       logDocumentsDebug('download failed', {
         docId: doc.id,
         name: doc.name,

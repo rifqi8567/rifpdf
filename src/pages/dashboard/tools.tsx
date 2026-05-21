@@ -45,11 +45,7 @@ import { analyzeOcrText, convertWordToPdf } from '@/services/api';
 // Keep PDF rendering fully client-side without depending on an external CDN.
 pdfjs.GlobalWorkerOptions.workerSrc = '/pdf.worker.min.js';
 
-const logToolDebug = (label: string, details: Record<string, unknown>) => {
-  console.groupCollapsed(`[Tools Debug] ${label}`);
-  console.log('Details:', details);
-  console.groupEnd();
-};
+const logToolDebug = (_label: string, _details: Record<string, unknown>) => undefined;
 
 const serializeToolError = (error: unknown) => {
   if (error instanceof Error) {
@@ -1730,7 +1726,7 @@ export default function ToolPage() {
       );
     } catch (error) {
       const serializedError = serializeToolError(error);
-      console.error(`[Tools Debug] pdf-to-jpg failed: ${serializedError.name}: ${serializedError.message}`, error);
+      console.error(`PDF to JPG failed: ${serializedError.name}: ${serializedError.message}`, error);
       logToolDebug('pdf-to-jpg failed', {
         fileName: file.name,
         error: serializedError,

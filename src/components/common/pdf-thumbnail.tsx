@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import * as pdfjs from 'pdfjs-dist';
 import { FileText, Loader2 } from 'lucide-react';
-import { configuredSupabaseUrl, supabase } from '@/lib/supabase';
+import { supabase } from '@/lib/supabase';
 
 // Keep PDF thumbnails on the same bundled worker used by the tool pages.
 pdfjs.GlobalWorkerOptions.workerSrc = '/pdf.worker.min.js';
@@ -39,12 +39,7 @@ const getStoragePathCandidates = (value: string) => {
   return Array.from(new Set(candidates.filter(Boolean)));
 };
 
-const logThumbnailDebug = (label: string, details: Record<string, unknown>) => {
-  console.groupCollapsed(`[PDF Thumbnail Debug] ${label}`);
-  console.log('Supabase URL:', configuredSupabaseUrl);
-  console.log('Details:', details);
-  console.groupEnd();
-};
+const logThumbnailDebug = (_label: string, _details: Record<string, unknown>) => undefined;
 
 const serializeError = (error: unknown) => {
   if (error instanceof Error) {
@@ -258,7 +253,7 @@ export function PdfThumbnail({ fileUrl }: PdfThumbnailProps) {
       const message = serializedError.message;
       const name = serializedError.name;
 
-      console.error(`[PDF Thumbnail Debug] render document failed: ${name}: ${message}`, renderError);
+      console.error(`PDF thumbnail render failed: ${name}: ${message}`, renderError);
       logThumbnailDebug('render document failed', {
         fileUrl,
         error: serializedError,
