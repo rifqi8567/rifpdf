@@ -11,6 +11,8 @@ services:
       - "443:443"
     volumes:
       - ./config/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./dist:/usr/share/nginx/html:ro
+      - /etc/letsencrypt:/etc/letsencrypt:ro
     depends_on:
       api:
         condition: service_healthy
@@ -18,7 +20,7 @@ services:
 
   # 2. API Server (Node.js)
   api:
-    build: 
+    build:
       context: ./backend
       dockerfile: Dockerfile
     container_name: documind-api
