@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { pdfjs } from 'react-pdf';
+import * as pdfjs from 'pdfjs-dist';
 import { FileText, Loader2 } from 'lucide-react';
 import { configuredSupabaseUrl, supabase } from '@/lib/supabase';
 
