@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react';
-import { Document, Page, pdfjs } from 'react-pdf';
+import { useState, useEffect, useRef } from 'react';
+import { pdfjs } from 'react-pdf';
 import { FileText, Loader2 } from 'lucide-react';
 import { configuredSupabaseUrl, supabase } from '@/lib/supabase';
 
@@ -47,15 +47,15 @@ const logThumbnailDebug = (label: string, details: Record<string, unknown>) => {
 };
 
 export function PdfThumbnail({ fileUrl }: PdfThumbnailProps) {
-  const [pdfUrl, setPdfUrl] = useState<string | null>(null);
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(false);
 
   useEffect(() => {
-    let objectUrl: string | null = null;
     let cancelled = false;
 
-    const fetchPdf = async () => {
-      setPdfUrl(null);
+    const renderThumbnail = async () => {
+      setIsLoading(true);
       setError(false);
 
       const candidates = getStoragePathCandidates(fileUrl);
@@ -69,93 +69,119 @@ export function PdfThumbnail({ fileUrl }: PdfThumbnailProps) {
       });
 
       if (storagePath) {
-        const { data, error } = await supabase.storage
+        const { data: blob, error: downloadError } = await supabase.storage
           .from('documents')
           .download(storagePath);
 
-        if (data) {
-          objectUrl = URL.createObjectURL(data);
-          if (cancelled) {
-            URL.revokeObjectURL(objectUrl);
-            return;
-          }
-
+        if (blob) {
           logThumbnailDebug('blob url generated', {
             fileUrl,
             storagePath,
-            blobSize: data.size,
-            blobType: data.type,
+            blobSize: blob.size,
+            blobType: blob.type,
             candidates,
           });
-          setPdfUrl(objectUrl);
+
+          const buffer = await blob.arrayBuffer();
+          if (cancelled) return;
+
+          const pdf = await pdfjs.getDocument({ data: new Uint8Array(buffer) }).promise;
+          const page = await pdf.getPage(1);
+          if (cancelled) {
+            pdf.destroy();
+            return;
+          }
+
+          const canvas = canvasRef.current;
+          const context = canvas?.getContext('2d');
+          if (!canvas || !context) {
+            pdf.destroy();
+            throw new Error('Canvas thumbnail target is not available.');
+          }
+
+          const baseViewport = page.getViewport({ scale: 1 });
+          const targetWidth = 400;
+          const scale = targetWidth / baseViewport.width;
+          const viewport = page.getViewport({ scale });
+          const pixelRatio = Math.min(window.devicePixelRatio || 1, 2);
+
+          canvas.width = Math.floor(viewport.width * pixelRatio);
+          canvas.height = Math.floor(viewport.height * pixelRatio);
+          canvas.style.width = `${Math.floor(viewport.width)}px`;
+          canvas.style.height = `${Math.floor(viewport.height)}px`;
+
+          context.setTransform(pixelRatio, 0, 0, pixelRatio, 0, 0);
+          context.clearRect(0, 0, viewport.width, viewport.height);
+
+          await page.render({
+            canvas,
+            canvasContext: context,
+            viewport,
+          }).promise;
+
+          pdf.destroy();
+          if (cancelled) return;
+
+          logThumbnailDebug('render document loaded', {
+            fileUrl,
+            pages: pdf.numPages,
+          });
+          setIsLoading(false);
           return;
         }
 
         logThumbnailDebug('download failed', {
           fileUrl,
           storagePath,
-          error,
+          error: downloadError,
         });
       }
 
       logThumbnailDebug('failed', { fileUrl, candidates });
       console.error('THUMBNAIL DOWNLOAD ERROR:', { fileUrl, candidates });
-      if (!cancelled) setError(true);
+      if (!cancelled) {
+        setError(true);
+        setIsLoading(false);
+      }
     };
 
-    fetchPdf();
+    renderThumbnail().catch((renderError) => {
+      logThumbnailDebug('render document failed', {
+        fileUrl,
+        error: renderError,
+        message: renderError instanceof Error ? renderError.message : undefined,
+        name: renderError instanceof Error ? renderError.name : undefined,
+      });
+      if (!cancelled) {
+        setError(true);
+        setIsLoading(false);
+      }
+    });
 
     return () => {
       cancelled = true;
-      if (objectUrl) URL.revokeObjectURL(objectUrl);
     };
   }, [fileUrl]);
 
-  if (error || !pdfUrl) {
+  if (error) {
     return (
       <div className="flex h-full w-full items-center justify-center bg-surface-3">
-        {error ? <FileText className="h-12 w-12 text-muted-foreground/30" /> : <Loader2 className="h-6 w-6 animate-spin text-muted-foreground/50" />}
+        <FileText className="h-12 w-12 text-muted-foreground/30" />
       </div>
     );
   }
 
   return (
-    <div className="absolute inset-0 w-full h-full overflow-hidden bg-white/5">
-      <Document
-        file={pdfUrl}
-        onLoadSuccess={(pdf) => {
-          logThumbnailDebug('render document loaded', {
-            fileUrl,
-            pages: pdf.numPages,
-          });
-        }}
-        onLoadError={(loadError) => {
-          logThumbnailDebug('render document failed', {
-            fileUrl,
-            error: loadError,
-          });
-          setError(true);
-        }}
-        loading={
-          <div className="flex h-full w-full items-center justify-center">
-            <Loader2 className="h-6 w-6 animate-spin text-muted-foreground/50" />
-          </div>
-        }
-        error={
-          <div className="flex h-full w-full items-center justify-center">
-            <FileText className="h-12 w-12 text-muted-foreground/30" />
-          </div>
-        }
-        className="h-full w-full"
-      >
-        <Page
-          pageNumber={1}
-          width={400}
-          renderTextLayer={false}
-          renderAnnotationLayer={false}
-          className="w-full h-full [&>canvas]:!w-full [&>canvas]:!h-full [&>canvas]:!object-cover"
-        />
-      </Document>
+    <div className="absolute inset-0 flex h-full w-full items-start justify-center overflow-hidden bg-white/5">
+      {isLoading && (
+        <div className="absolute inset-0 z-10 flex items-center justify-center bg-surface-3">
+          <Loader2 className="h-6 w-6 animate-spin text-muted-foreground/50" />
+        </div>
+      )}
+      <canvas
+        ref={canvasRef}
+        className="min-h-full w-full object-cover"
+      />
     </div>
   );
 }
