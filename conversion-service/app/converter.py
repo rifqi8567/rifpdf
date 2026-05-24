@@ -68,37 +68,33 @@ def normalize_docx_header_drawings_for_libreoffice(source: Path, job_id: str, wo
                     for anchor in root.findall(f".//{{{WP_NS}}}anchor"):
                         extent = anchor.find(f"{{{WP_NS}}}extent")
                         width_emu = int(extent.get("cx", "0")) if extent is not None else 0
+                        height_emu = int(extent.get("cy", "0")) if extent is not None else 0
                         is_background_shape = width_emu >= HEADER_BACKGROUND_MIN_WIDTH_EMU
 
                         if not is_background_shape:
                             continue
 
+                        position_h = anchor.find(f"{{{WP_NS}}}positionH")
+                        position_v = anchor.find(f"{{{WP_NS}}}positionV")
+                        logger.info(
+                            "docx_header_background_shape job_id=%s file=%s width_cm=%.2f height_cm=%.2f pos_h_from=%s pos_v_from=%s behind_doc=%s",
+                            job_id,
+                            item.filename,
+                            width_emu / EMU_PER_CM,
+                            height_emu / EMU_PER_CM,
+                            position_h.get("relativeFrom") if position_h is not None else None,
+                            position_v.get("relativeFrom") if position_v is not None else None,
+                            anchor.get("behindDoc"),
+                        )
+
                         anchor.set("behindDoc", "1")
                         anchor.set("allowOverlap", "1")
                         anchor.set("layoutInCell", "1")
                         anchor.set("relativeHeight", "0")
-                        anchor.set("simplePos", "0")
                         anchor.set("distT", "0")
                         anchor.set("distB", "0")
                         anchor.set("distL", "0")
                         anchor.set("distR", "0")
-
-                        position_h = anchor.find(f"{{{WP_NS}}}positionH")
-                        if position_h is not None:
-                            position_h.set("relativeFrom", "page")
-                            pos_offset = position_h.find(f"{{{WP_NS}}}posOffset")
-                            if pos_offset is not None:
-                                pos_offset.text = "0"
-
-                        position_v = anchor.find(f"{{{WP_NS}}}positionV")
-                        if position_v is not None:
-                            position_v.set("relativeFrom", "page")
-                            align = position_v.find(f"{{{WP_NS}}}align")
-                            pos_offset = position_v.find(f"{{{WP_NS}}}posOffset")
-                            if align is not None:
-                                align.text = "top"
-                            elif pos_offset is not None:
-                                pos_offset.text = "0"
 
                         for child in list(anchor):
                             if child.tag.startswith(f"{{{WP_NS}}}wrap") and child.tag != f"{{{WP_NS}}}wrapNone":
