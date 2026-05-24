@@ -96,20 +96,6 @@ Deno.serve(async (req) => {
       }`,
     }
 
-    // Check user credits
-    const { data: profile } = await supabase
-      .from('profiles')
-      .select('credits_remaining, plan')
-      .eq('id', user.id)
-      .single()
-
-    if (profile && profile.credits_remaining <= 0 && profile.plan === 'free') {
-      return new Response(
-        JSON.stringify({ error: 'No credits remaining. Please upgrade your plan.' }),
-        { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      )
-    }
-
     // Call OpenRouter API
     const aiResponse = await fetch('https://openrouter.ai/api/v1/chat/completions', {
       method: 'POST',
@@ -140,21 +126,13 @@ Deno.serve(async (req) => {
     const assistantMessage = aiData.choices?.[0]?.message?.content || 'Sorry, I could not generate a response.'
     const tokensUsed = aiData.usage?.total_tokens || 0
 
-    // Deduct credits
-    if (profile) {
-      await supabase
-        .from('profiles')
-        .update({ credits_remaining: Math.max(0, profile.credits_remaining - 1) })
-        .eq('id', user.id)
-
-      // Log usage
-      await supabase.from('usage_logs').insert({
-        user_id: user.id,
-        action_type: 'chat',
-        credits_used: 1,
-        metadata: { model: model || 'google/gemini-2.0-flash-exp', tokens: tokensUsed },
-      })
-    }
+    // Log usage for analytics only. This no longer deducts credits.
+    await supabase.from('usage_logs').insert({
+      user_id: user.id,
+      action_type: 'chat',
+      credits_used: 0,
+      metadata: { model: model || 'google/gemini-2.0-flash-exp', tokens: tokensUsed, free_access: true },
+    })
 
     return new Response(
       JSON.stringify({

@@ -14,10 +14,15 @@ logger = logging.getLogger("conversion.converter")
 _font_inventory_logged = False
 
 WP_NS = "http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing"
+VML_NS = "urn:schemas-microsoft-com:vml"
+W10_NS = "urn:schemas-microsoft-com:office:word"
 ET.register_namespace("wp", WP_NS)
+ET.register_namespace("v", VML_NS)
+ET.register_namespace("w10", W10_NS)
 
 EMU_PER_CM = 360000
 HEADER_BACKGROUND_MIN_WIDTH_EMU = 10 * EMU_PER_CM
+HEADER_BACKGROUND_MIN_WIDTH_PT = 250
 
 
 class ConversionError(RuntimeError):
@@ -65,6 +70,40 @@ def normalize_docx_header_drawings_for_libreoffice(source: Path, job_id: str, wo
                 try:
                     root = ET.fromstring(data)
                     changed = False
+
+                    for shape in root.findall(f".//{{{VML_NS}}}shape"):
+                        style = shape.get("style", "")
+                        fillcolor = (shape.get("fillcolor") or "").lower()
+                        width_pt = extract_style_length_pt(style, "width")
+                        is_blue = fillcolor.startswith("#") and fillcolor not in {"#000000", "#ffffff"}
+                        is_background_shape = width_pt >= HEADER_BACKGROUND_MIN_WIDTH_PT or is_blue
+
+                        if not is_background_shape:
+                            continue
+
+                        logger.info(
+                            "docx_header_vml_shape job_id=%s file=%s width_pt=%.2f fillcolor=%s style=%s",
+                            job_id,
+                            item.filename,
+                            width_pt,
+                            fillcolor,
+                            style[:500],
+                        )
+
+                        new_style = normalize_vml_header_shape_style(style)
+                        if new_style != style:
+                            shape.set("style", new_style)
+                            changed = True
+
+                        shape.set(f"{{{W10_NS}}}wrapcoords", "")
+                        wrap = shape.find(f"{{{W10_NS}}}wrap")
+                        if wrap is None:
+                            wrap = ET.SubElement(shape, f"{{{W10_NS}}}wrap")
+                        wrap.set("type", "none")
+                        wrap.set("anchorx", "page")
+                        wrap.set("anchory", "page")
+                        changed = True
+
                     for anchor in root.findall(f".//{{{WP_NS}}}anchor"):
                         extent = anchor.find(f"{{{WP_NS}}}extent")
                         width_emu = int(extent.get("cx", "0")) if extent is not None else 0
@@ -119,6 +158,55 @@ def normalize_docx_header_drawings_for_libreoffice(source: Path, job_id: str, wo
 
     normalized.unlink(missing_ok=True)
     return source
+
+
+def extract_style_length_pt(style: str, name: str) -> float:
+    prefix = f"{name}:"
+    for part in style.split(";"):
+        part = part.strip()
+        if not part.lower().startswith(prefix):
+            continue
+
+        raw = part.split(":", 1)[1].strip().lower()
+        try:
+            if raw.endswith("pt"):
+                return float(raw[:-2])
+            if raw.endswith("in"):
+                return float(raw[:-2]) * 72
+            if raw.endswith("cm"):
+                return float(raw[:-2]) * 28.3464567
+            if raw.endswith("mm"):
+                return float(raw[:-2]) * 2.83464567
+            if raw.endswith("px"):
+                return float(raw[:-2]) * 0.75
+            return float(raw)
+        except ValueError:
+            return 0
+
+    return 0
+
+
+def normalize_vml_header_shape_style(style: str) -> str:
+    parts = [part.strip() for part in style.split(";") if part.strip()]
+    values: dict[str, str] = {}
+
+    for part in parts:
+        if ":" not in part:
+            continue
+        key, value = part.split(":", 1)
+        values[key.strip().lower()] = value.strip()
+
+    values["position"] = "absolute"
+    values["z-index"] = "-251658240"
+    values["mso-position-horizontal-relative"] = "page"
+    values["mso-position-vertical-relative"] = "page"
+    values["mso-wrap-style"] = "none"
+    values["mso-wrap-distance-left"] = "0"
+    values["mso-wrap-distance-right"] = "0"
+    values["mso-wrap-distance-top"] = "0"
+    values["mso-wrap-distance-bottom"] = "0"
+
+    return ";".join(f"{key}:{value}" for key, value in values.items())
 
 
 def convert_to_pdf(job_id: str, input_path: str, original_filename: str, extension: str) -> dict[str, str | int]:

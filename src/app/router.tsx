@@ -112,14 +112,6 @@ const router = createBrowserRouter([
         ),
       },
       {
-        path: 'billing',
-        element: (
-          <Suspense fallback={<PageLoader />}>
-            <SettingsPage />
-          </Suspense>
-        ),
-      },
-      {
         path: 'help',
         element: (
           <Suspense fallback={<PageLoader />}>

@@ -15,7 +15,6 @@ import {
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
 import { useThemeStore } from '@/store/theme-store';
 import { useAuthStore } from '@/store/auth-store';
 import { cn } from '@/lib/utils';
@@ -379,22 +378,6 @@ export default function SettingsPage() {
                 </button>
               ))}
             </div>
-          </CardContent>
-        </Card>
-      </motion.div>
-
-      {/* Plan */}
-      <motion.div {...fadeUp} transition={{ delay: 0.6 }}>
-        <Card className="border-primary/20 bg-gradient-to-r from-primary/5 to-accent/5">
-          <CardContent className="p-6 flex flex-col sm:flex-row items-center justify-between gap-4">
-            <div>
-              <div className="flex items-center gap-2 mb-1">
-                <h3 className="font-semibold">Paket Saat Ini</h3>
-                <Badge variant="gradient">Free</Badge>
-              </div>
-              <p className="text-sm text-muted-foreground">Upgrade untuk fitur dan kredit lebih banyak</p>
-            </div>
-            <Button variant="gradient">Upgrade ke Pro</Button>
           </CardContent>
         </Card>
       </motion.div>

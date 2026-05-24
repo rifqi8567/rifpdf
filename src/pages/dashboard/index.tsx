@@ -10,7 +10,6 @@ import {
   Sparkles,
   TrendingUp,
   Upload,
-  Zap,
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { useEffect, useState } from 'react';
@@ -44,7 +43,7 @@ const aiModels = [
   { name: 'Ollama VPS', icon: 'Local', speed: 'Private' },
   { name: 'Gemini Flash', icon: 'Fast', speed: 'Fast' },
   { name: 'DeepSeek', icon: 'Cost', speed: 'Fast' },
-  { name: 'GPT-4o', icon: 'Pro', speed: 'Medium' },
+  { name: 'GPT-4o', icon: 'AI', speed: 'Medium' },
   { name: 'Qwen 2.5', icon: 'ID', speed: 'Medium' },
 ];
 
@@ -119,8 +118,6 @@ export default function DashboardPage() {
   const totalPages = docs.reduce((sum, doc) => sum + (doc.page_count || 0), 0);
   const totalSize = docs.reduce((sum, doc) => sum + (doc.file_size || 0), 0);
   const recentDocs = docs.slice(0, 4);
-  const creditsRemaining = user?.credits_remaining ?? 0;
-
   const stats = [
     {
       label: 'Dokumen',
@@ -139,17 +136,17 @@ export default function DashboardPage() {
       bg: 'bg-purple-400/10',
     },
     {
-      label: 'Kredit Tersisa',
-      value: creditsRemaining.toLocaleString('id-ID'),
-      change: user?.plan ? `Paket ${user.plan}` : 'belum dimuat',
-      icon: Zap,
+      label: 'Penyimpanan',
+      value: formatFileSize(totalSize),
+      change: 'bebas dipakai',
+      icon: TrendingUp,
       color: 'text-yellow-400',
       bg: 'bg-yellow-400/10',
     },
     {
       label: 'Halaman Diproses',
       value: totalPages.toLocaleString('id-ID'),
-      change: formatFileSize(totalSize),
+      change: 'gratis',
       icon: TrendingUp,
       color: 'text-green-400',
       bg: 'bg-green-400/10',

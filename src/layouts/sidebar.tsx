@@ -15,7 +15,6 @@ import {
   RotateCw,
   FileImage,
   Settings,
-  CreditCard,
   HelpCircle,
   ChevronLeft,
   X,
@@ -55,7 +54,6 @@ const toolsNavItems: NavItem[] = [
 
 const settingsNavItems: NavItem[] = [
   { label: 'Pengaturan', href: '/dashboard/settings', icon: Settings },
-  { label: 'Langganan', href: '/dashboard/billing', icon: CreditCard },
   { label: 'Bantuan', href: '/dashboard/help', icon: HelpCircle },
 ];
 
@@ -179,15 +177,11 @@ export function Sidebar() {
           <NavSection title="Lainnya" items={settingsNavItems} collapsed={isCollapsed} />
         </nav>
 
-        {/* Footer */}
         {!isCollapsed && (
           <div className="border-t border-sidebar-border p-4">
-            <div className="rounded-xl bg-gradient-to-r from-primary/10 to-accent/10 p-3 space-y-2">
-              <p className="text-xs font-semibold text-foreground">Free Plan</p>
-              <div className="h-1.5 rounded-full bg-border overflow-hidden">
-                <div className="h-full w-[30%] rounded-full gradient-bg" />
-              </div>
-              <p className="text-[11px] text-muted-foreground">3/10 kredit terpakai</p>
+            <div className="rounded-xl bg-gradient-to-r from-primary/10 to-accent/10 p-3">
+              <p className="text-xs font-semibold text-foreground">Semua fitur gratis</p>
+              <p className="mt-1 text-[11px] text-muted-foreground">Semua tools aktif untuk akun ini.</p>
             </div>
           </div>
         )}

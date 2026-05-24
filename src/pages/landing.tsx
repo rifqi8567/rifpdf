@@ -52,10 +52,10 @@ function LandingHeader() {
           <Logo size="md" />
 
           <nav className="hidden md:flex items-center gap-8">
-            {['Fitur', 'Tools', 'Harga', 'Tentang'].map((item) => (
+            {['Fitur', 'Tools', 'Gratis', 'Tentang'].map((item) => (
               <a
                 key={item}
-                href={`#${item.toLowerCase()}`}
+                href={item === 'Gratis' ? '#gratis' : `#${item.toLowerCase()}`}
                 className="text-sm text-muted-foreground hover:text-foreground transition-colors"
               >
                 {item}
@@ -380,105 +380,53 @@ function ToolsSection() {
   );
 }
 
-// ============================================
-// Pricing Section
-// ============================================
-const plans = [
-  {
-    name: 'Free',
-    price: 0,
-    description: 'Untuk mencoba semua fitur dasar',
-    features: ['10 kredit/bulan', '5 MB maks upload', 'AI Chat PDF', 'Merge & Split', 'OCR dasar'],
-    highlighted: false,
-    cta: 'Mulai Gratis',
-  },
-  {
-    name: 'Pro',
-    price: 99000,
-    description: 'Untuk profesional dan tim kecil',
-    features: ['500 kredit/bulan', '50 MB maks upload', 'Semua AI model', 'Semua tools PDF', 'Priority support', 'API access'],
-    highlighted: true,
-    cta: 'Berlangganan Pro',
-  },
-  {
-    name: 'Enterprise',
-    price: 499000,
-    description: 'Untuk bisnis dan organisasi besar',
-    features: ['Unlimited kredit', '200 MB maks upload', 'Custom AI model', 'Admin dashboard', 'SSO & audit log', 'Dedicated support'],
-    highlighted: false,
-    cta: 'Hubungi Sales',
-  },
+const freeFeatures = [
+  'Semua tools PDF tersedia gratis',
+  'AI Chat PDF dan ringkasan dokumen tersedia untuk semua akun',
+  'OCR Scanner untuk PDF dan gambar',
+  'Merge, split, compress, rotate, sign, dan convert',
+  'Tanpa pembayaran dan tanpa hitungan jatah pakai',
 ];
 
-function PricingSection() {
+function FreeAccessSection() {
   return (
-    <section id="harga" className="py-24">
+    <section id="gratis" className="py-24">
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
         <motion.div
           initial="initial"
           whileInView="animate"
           viewport={{ once: true }}
           variants={staggerContainer}
-          className="text-center mb-16"
+          className="mx-auto max-w-4xl overflow-hidden rounded-3xl border border-primary/25 bg-surface-2 p-8 shadow-glow lg:p-10"
         >
           <motion.div variants={fadeUp}>
-            <Badge variant="outline" className="mb-4">💎 Harga</Badge>
+            <Badge variant="outline" className="mb-4">Gratis Penuh</Badge>
           </motion.div>
-          <motion.h2 variants={fadeUp} className="text-3xl sm:text-4xl font-bold mb-4">
-            Pilih paket yang <span className="gradient-text">tepat untuk Anda</span>
+          <motion.h2 variants={fadeUp} className="text-3xl font-bold sm:text-4xl">
+            Semua fitur DocuMind sekarang gratis.
           </motion.h2>
-        </motion.div>
+          <motion.p variants={fadeUp} className="mt-4 text-muted-foreground">
+            Semua akun mendapat akses yang sama. Fokusnya sekarang simpel:
+            upload dokumen, proses PDF, pakai AI, dan selesai.
+          </motion.p>
 
-        <motion.div
-          initial="initial"
-          whileInView="animate"
-          viewport={{ once: true }}
-          variants={staggerContainer}
-          className="grid gap-6 md:grid-cols-3 max-w-5xl mx-auto"
-        >
-          {plans.map((plan) => (
-            <motion.div
-              key={plan.name}
-              variants={fadeUp}
-              className={cn(
-                'relative rounded-2xl p-6 flex flex-col',
-                plan.highlighted
-                  ? 'border-2 border-primary bg-surface-2 shadow-glow-lg scale-105'
-                  : 'border border-border bg-card'
-              )}
-            >
-              {plan.highlighted && (
-                <div className="absolute -top-3 left-1/2 -translate-x-1/2">
-                  <Badge variant="gradient">Populer</Badge>
-                </div>
-              )}
-              <div className="mb-6">
-                <h3 className="text-xl font-bold">{plan.name}</h3>
-                <p className="text-sm text-muted-foreground mt-1">{plan.description}</p>
+          <motion.div variants={fadeUp} className="mt-8 grid gap-3 sm:grid-cols-2">
+            {freeFeatures.map((feature) => (
+              <div key={feature} className="flex items-center gap-3 rounded-xl border border-border bg-card/60 p-4">
+                <Check className="h-5 w-5 shrink-0 text-success" />
+                <span className="text-sm font-medium">{feature}</span>
               </div>
-              <div className="mb-6">
-                <span className="text-4xl font-bold">
-                  {plan.price === 0 ? 'Gratis' : `Rp${(plan.price / 1000).toFixed(0)}rb`}
-                </span>
-                {plan.price > 0 && <span className="text-muted-foreground text-sm">/bulan</span>}
-              </div>
-              <ul className="space-y-3 mb-8 flex-1">
-                {plan.features.map((feature) => (
-                  <li key={feature} className="flex items-center gap-2 text-sm">
-                    <Check className="h-4 w-4 text-success shrink-0" />
-                    <span>{feature}</span>
-                  </li>
-                ))}
-              </ul>
-              <Button
-                variant={plan.highlighted ? 'gradient' : 'outline'}
-                size="lg"
-                className="w-full"
-              >
-                {plan.cta}
+            ))}
+          </motion.div>
+
+          <motion.div variants={fadeUp} className="mt-8">
+            <Link to="/register">
+              <Button variant="gradient" size="lg">
+                Mulai Pakai Gratis
+                <ArrowRight className="ml-2 h-5 w-5" />
               </Button>
-            </motion.div>
-          ))}
+            </Link>
+          </motion.div>
         </motion.div>
       </div>
     </section>
@@ -549,7 +497,7 @@ export default function LandingPage() {
       <HeroSection />
       <FeaturesSection />
       <ToolsSection />
-      <PricingSection />
+      <FreeAccessSection />
       <Footer />
     </div>
   );

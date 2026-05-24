@@ -36,7 +36,7 @@ const faqs = [
   },
   {
     q: "Apakah ada batasan jumlah halaman?",
-    a: "Untuk paket Free, Anda bisa mengunggah dokumen hingga 50 halaman. Untuk paket Pro, Anda dapat mengunggah hingga 500 halaman per dokumen dengan proses yang lebih cepat."
+    a: "Semua fitur sekarang gratis. Batas praktis mengikuti kapasitas server, ukuran file yang diizinkan aplikasi, dan jenis proses dokumen yang sedang dijalankan."
   }
 ];
 

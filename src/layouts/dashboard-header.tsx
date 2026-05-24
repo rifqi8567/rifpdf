@@ -5,7 +5,6 @@ import { Input } from '@/components/ui/input';
 import { ThemeToggle } from '@/components/common/theme-toggle';
 import { useSidebarStore } from '@/store/sidebar-store';
 import { useAuthStore } from '@/store/auth-store';
-import { Badge } from '@/components/ui/badge';
 import { supabase } from '@/lib/supabase';
 import { getUserProfile } from '@/services/profile';
 import { debugAction, debugError } from '@/lib/debug';
@@ -91,9 +90,7 @@ export function DashboardHeader() {
             </div>
             <div className="hidden md:block">
               <p className="text-sm font-medium leading-none">{displayName}</p>
-              <Badge variant="default" className="mt-1 text-[10px]">
-                {user?.plan === 'pro' ? 'Pro' : 'Free'}
-              </Badge>
+              <p className="mt-1 text-[10px] text-muted-foreground">Gratis penuh</p>
             </div>
           </div>
           
