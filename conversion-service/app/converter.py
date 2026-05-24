@@ -16,6 +16,9 @@ _font_inventory_logged = False
 WP_NS = "http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing"
 ET.register_namespace("wp", WP_NS)
 
+EMU_PER_CM = 360000
+HEADER_BACKGROUND_MIN_WIDTH_EMU = 10 * EMU_PER_CM
+
 
 class ConversionError(RuntimeError):
     pass
@@ -65,10 +68,39 @@ def normalize_docx_header_drawings_for_libreoffice(source: Path, job_id: str, wo
                     root = ET.fromstring(data)
                     changed = False
                     for anchor in root.findall(f".//{{{WP_NS}}}anchor"):
+                        extent = anchor.find(f"{{{WP_NS}}}extent")
+                        width_emu = int(extent.get("cx", "0")) if extent is not None else 0
+                        is_background_shape = width_emu >= HEADER_BACKGROUND_MIN_WIDTH_EMU
+
+                        if not is_background_shape:
+                            continue
+
                         anchor.set("behindDoc", "1")
                         anchor.set("allowOverlap", "1")
                         anchor.set("layoutInCell", "1")
                         anchor.set("relativeHeight", "0")
+                        anchor.set("simplePos", "0")
+                        anchor.set("distT", "0")
+                        anchor.set("distB", "0")
+                        anchor.set("distL", "0")
+                        anchor.set("distR", "0")
+
+                        position_h = anchor.find(f"{{{WP_NS}}}positionH")
+                        if position_h is not None:
+                            position_h.set("relativeFrom", "page")
+                            pos_offset = position_h.find(f"{{{WP_NS}}}posOffset")
+                            if pos_offset is not None:
+                                pos_offset.text = "0"
+
+                        position_v = anchor.find(f"{{{WP_NS}}}positionV")
+                        if position_v is not None:
+                            position_v.set("relativeFrom", "page")
+                            align = position_v.find(f"{{{WP_NS}}}align")
+                            pos_offset = position_v.find(f"{{{WP_NS}}}posOffset")
+                            if align is not None:
+                                align.text = "top"
+                            elif pos_offset is not None:
+                                pos_offset.text = "0"
 
                         for child in list(anchor):
                             if child.tag.startswith(f"{{{WP_NS}}}wrap") and child.tag != f"{{{WP_NS}}}wrapNone":
