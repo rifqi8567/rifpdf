@@ -327,8 +327,10 @@ export async function convertOfficeToPdf(file: File): Promise<Blob> {
 
   const formData = new FormData();
   formData.append('file', file);
+  const requestId = crypto.randomUUID();
 
   const debugPayload = {
+    requestId,
     fileName: file.name,
     fileType: file.type,
     fileSize: file.size,
@@ -340,6 +342,7 @@ export async function convertOfficeToPdf(file: File): Promise<Blob> {
   const response = await fetch(buildApiUrl('/api/convert/office-to-pdf'), {
     method: 'POST',
     headers: {
+      'X-Request-Id': requestId,
       ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {})
     },
     body: formData,

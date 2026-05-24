@@ -117,7 +117,7 @@ const uploadOfficeFile = (req: Request, res: Response, next: NextFunction) => {
 
 const forwardOfficeConversion = async (req: Request, res: Response) => {
   const uploadedPath = req.file?.path;
-  const requestId = crypto.randomUUID();
+  const requestId = String(req.headers['x-request-id'] || crypto.randomUUID());
   try {
     if (!req.file) {
       logger.warn('Office conversion rejected: missing upload', {

@@ -11,6 +11,11 @@ import { initCronJobs } from '../jobs/cron';
 
 export const app = express();
 
+// Nginx runs in front of the API container and forwards the real client IP.
+// express-rate-limit v8 validates this header and can throw a 500 unless
+// Express is told to trust the reverse proxy.
+app.set('trust proxy', 1);
+
 // 1. Strict Security Headers (Helmet)
 app.use(helmet({
   contentSecurityPolicy: {
@@ -55,6 +60,19 @@ initCronJobs();
 
 // Global Error Handler
 app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
-  logger.error('Unhandled Exception:', err);
-  res.status(500).json({ error: 'Internal Server Error' });
+  const requestId = req.headers['x-request-id'] || `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+  logger.error('Unhandled Exception:', {
+    requestId,
+    method: req.method,
+    path: req.originalUrl,
+    errorName: err?.name,
+    errorCode: err?.code,
+    errorMessage: err?.message,
+    errorStack: err?.stack,
+  });
+  res.status(err?.status || 500).json({
+    error: err?.message || 'Internal Server Error',
+    code: err?.code,
+    requestId,
+  });
 });
