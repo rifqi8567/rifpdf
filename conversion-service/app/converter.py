@@ -77,7 +77,7 @@ def normalize_docx_header_drawings_for_libreoffice(source: Path, job_id: str, wo
                         position_h = anchor.find(f"{{{WP_NS}}}positionH")
                         position_v = anchor.find(f"{{{WP_NS}}}positionV")
                         logger.info(
-                            "docx_header_background_shape job_id=%s file=%s width_cm=%.2f height_cm=%.2f pos_h_from=%s pos_v_from=%s behind_doc=%s",
+                            "docx_header_background_shape job_id=%s file=%s width_cm=%.2f height_cm=%.2f pos_h_from=%s pos_v_from=%s behind_doc=%s relative_height=%s",
                             job_id,
                             item.filename,
                             width_emu / EMU_PER_CM,
@@ -85,12 +85,12 @@ def normalize_docx_header_drawings_for_libreoffice(source: Path, job_id: str, wo
                             position_h.get("relativeFrom") if position_h is not None else None,
                             position_v.get("relativeFrom") if position_v is not None else None,
                             anchor.get("behindDoc"),
+                            anchor.get("relativeHeight"),
                         )
 
                         anchor.set("behindDoc", "1")
                         anchor.set("allowOverlap", "1")
                         anchor.set("layoutInCell", "1")
-                        anchor.set("relativeHeight", "0")
                         anchor.set("distT", "0")
                         anchor.set("distB", "0")
                         anchor.set("distL", "0")
