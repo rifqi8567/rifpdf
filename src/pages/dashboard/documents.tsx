@@ -118,6 +118,10 @@ export default function DocumentsPage() {
   const [folderToRename, setFolderToRename] = useState<Folder | null>(null);
   const [newFolderNameEdit, setNewFolderNameEdit] = useState('');
   const [folderToDelete, setFolderToDelete] = useState<Folder | null>(null);
+  const processingDocIds = docs
+    .filter((doc) => doc.status === 'processing' || doc.status === 'uploading')
+    .map((doc) => doc.id)
+    .join('|');
 
   useEffect(() => {
     if (!user) return;
@@ -171,17 +175,54 @@ export default function DocumentsPage() {
     fetchData();
   }, [user]);
 
-  // Simulasi proses AI backend (merubah status dari processing -> ready setelah 4 detik)
+  // Refresh status dari backend agar UI tidak menampilkan ready sebelum worker AI selesai.
   useEffect(() => {
-    const processingDocs = docs.filter(d => d.status === 'processing');
-    if (processingDocs.length === 0) return;
+    if (!user) return;
+
+    const ids = processingDocIds.split('|').filter(Boolean);
+    if (ids.length === 0) return;
     
-    const timer = setTimeout(() => {
-      setDocs(prev => prev.map(d => d.status === 'processing' ? { ...d, status: 'ready' } : d));
-    }, 4000);
+    const refreshProcessingStatus = async () => {
+      logDocumentsDebug('processing status refresh start', {
+        ids,
+        count: ids.length,
+      });
+
+      const { data, error } = await supabase
+        .from('documents')
+        .select('id, status, content_text, updated_at')
+        .eq('user_id', user.id)
+        .in('id', ids);
+
+      if (error) {
+        logDocumentsDebug('processing status refresh failed', {
+          error: serializeDebugError(error),
+          ids,
+        });
+        return;
+      }
+
+      logDocumentsDebug('processing status refresh result', {
+        count: data?.length ?? 0,
+        documents: data?.map((doc) => ({
+          id: doc.id,
+          status: doc.status,
+          hasContentText: Boolean(doc.content_text),
+          contentTextLength: doc.content_text?.length ?? 0,
+        })),
+      });
+
+      setDocs((prev) => prev.map((doc) => {
+        const latest = data?.find((entry) => entry.id === doc.id);
+        return latest ? { ...doc, ...latest } as PDFDocument : doc;
+      }));
+    };
+
+    const timer = window.setInterval(refreshProcessingStatus, 5000);
+    void refreshProcessingStatus();
     
-    return () => clearTimeout(timer);
-  }, [docs]);
+    return () => window.clearInterval(timer);
+  }, [processingDocIds, user]);
 
   const currentDocs = docs.filter(doc => 
     doc.folder_id === (currentFolder ? currentFolder.id : null)

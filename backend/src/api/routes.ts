@@ -33,7 +33,14 @@ router.post('/documents/process', requireAuth, async (req, res) => {
   const { documentId } = req.body;
   const userId = req.user!.id;
 
+  logger.info('Document processing enqueue requested', {
+    documentId,
+    userId,
+    path: req.originalUrl,
+  });
+
   if (!documentId) {
+    logger.warn('Document processing enqueue rejected: missing documentId', { userId });
     return res.status(400).json({ error: 'Missing required field: documentId' });
   }
 
@@ -45,10 +52,21 @@ router.post('/documents/process', requireAuth, async (req, res) => {
     .single();
 
   if (error || !document) {
+    logger.warn('Document processing enqueue rejected: document not found', {
+      documentId,
+      userId,
+      errorMessage: error?.message,
+      errorCode: error?.code,
+    });
     return res.status(404).json({ error: 'Document not found' });
   }
 
   if (!document.file_url.startsWith(`${userId}/`)) {
+    logger.warn('Document processing enqueue rejected: invalid storage path', {
+      documentId,
+      userId,
+      fileUrl: document.file_url,
+    });
     return res.status(400).json({ error: 'Invalid document storage path' });
   }
 
@@ -62,6 +80,15 @@ router.post('/documents/process', requireAuth, async (req, res) => {
     backoff: { type: 'exponential', delay: 2000 },
     removeOnComplete: { age: 3600, count: 100 },
     removeOnFail: { age: 24 * 3600, count: 100 },
+  });
+
+  logger.info('Document processing job enqueued', {
+    documentId,
+    userId,
+    fileUrl: document.file_url,
+    currentStatus: document.status,
+    queueName: DOCUMENT_PROCESSING_QUEUE,
+    jobId: job.id,
   });
 
   res.json({ message: 'Document added to processing queue', jobId: job.id });

@@ -7,6 +7,12 @@ export class OllamaService {
 
   static async generateEmbeddings(text: string): Promise<number[]> {
     try {
+      logger.debug('Requesting Ollama embedding', {
+        host: this.host,
+        model: env.OLLAMA_EMBED_MODEL,
+        textLength: text.length,
+      });
+
       const response = await fetch(`${this.host}/api/embeddings`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -17,10 +23,15 @@ export class OllamaService {
       });
 
       if (!response.ok) {
-        throw new Error(`Ollama embedding failed: ${response.statusText}`);
+        const errorText = await response.text().catch(() => '');
+        throw new Error(`Ollama embedding failed (${response.status} ${response.statusText}): ${errorText}`);
       }
 
       const data = await response.json() as any;
+      logger.debug('Ollama embedding generated', {
+        model: env.OLLAMA_EMBED_MODEL,
+        dimensions: data.embedding?.length ?? 0,
+      });
       return data.embedding;
     } catch (error) {
       logger.error('Failed to generate embeddings from Ollama:', error);

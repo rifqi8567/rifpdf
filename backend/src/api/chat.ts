@@ -4,6 +4,7 @@ import { requireAuth } from '../middleware/auth';
 import { supabaseAdmin } from '../core/supabase';
 import { env } from '../config/env';
 import { OllamaService } from '../services/ollama';
+import { logger } from '../config/logger';
 
 const router = Router();
 
@@ -42,6 +43,10 @@ const writeSseDone = (res: Response) => {
 
 const retrieveContext = async (documentId: string, latestUserMessage: string) => {
   try {
+    logger.info('RAG vector retrieval started', {
+      documentId,
+      queryLength: latestUserMessage.length,
+    });
     const queryEmbedding = await OllamaService.generateEmbeddings(latestUserMessage);
     const { data, error } = await supabaseAdmin.rpc('match_document_chunks', {
       query_embedding: queryEmbedding,
@@ -51,9 +56,22 @@ const retrieveContext = async (documentId: string, latestUserMessage: string) =>
     });
 
     if (error) throw error;
+    logger.info('RAG vector retrieval completed', {
+      documentId,
+      matchCount: data?.length ?? 0,
+      queryEmbeddingDimensions: queryEmbedding.length,
+      similarities: data?.map((chunk: DocumentChunk) => chunk.similarity).slice(0, 5),
+    });
     if (data && data.length > 0) return data as DocumentChunk[];
   } catch (error) {
-    console.warn('[RAG] Vector retrieval failed, falling back to stored chunks:', error);
+    logger.warn('RAG vector retrieval failed, falling back to stored chunks', {
+      documentId,
+      errorName: (error as any)?.name,
+      errorMessage: (error as any)?.message,
+      errorCode: (error as any)?.code,
+      errorDetails: (error as any)?.details,
+      errorHint: (error as any)?.hint,
+    });
   }
 
   try {
@@ -64,9 +82,20 @@ const retrieveContext = async (documentId: string, latestUserMessage: string) =>
       .limit(10);
 
     if (chunksError) throw chunksError;
+    logger.info('RAG stored chunk fallback completed', {
+      documentId,
+      chunkCount: chunks?.length ?? 0,
+    });
     return (chunks || []) as DocumentChunk[];
   } catch (error) {
-    console.warn('[RAG] Stored chunk fallback failed, using document.content_text:', error);
+    logger.warn('RAG stored chunk fallback failed, using document.content_text', {
+      documentId,
+      errorName: (error as any)?.name,
+      errorMessage: (error as any)?.message,
+      errorCode: (error as any)?.code,
+      errorDetails: (error as any)?.details,
+      errorHint: (error as any)?.hint,
+    });
     return [];
   }
 };
@@ -180,7 +209,15 @@ router.post('/completions', requireAuth, async (req: Request, res: Response) => 
     const { documentId, messages, model = env.AI_PROVIDER === 'ollama' ? 'ollama/auto' : 'google/gemini-2.0-flash-exp' } = req.body;
     const userId = req.user!.id;
 
+    logger.info('RAG chat request received', {
+      documentId,
+      userId,
+      model,
+      messageCount: Array.isArray(messages) ? messages.length : 0,
+    });
+
     if (!documentId || !messages || !Array.isArray(messages)) {
+      logger.warn('RAG chat rejected: invalid payload', { documentId, userId });
       return res.status(400).json({ error: 'documentId and messages array are required' });
     }
 
@@ -192,10 +229,21 @@ router.post('/completions', requireAuth, async (req: Request, res: Response) => 
       .single();
 
     if (documentError || !document) {
+      logger.warn('RAG chat rejected: document not found', {
+        documentId,
+        userId,
+        errorMessage: documentError?.message,
+        errorCode: documentError?.code,
+      });
       return res.status(404).json({ error: 'Document not found' });
     }
 
     if (document.status === 'processing' || document.status === 'uploading') {
+      logger.info('RAG chat rejected: document still processing', {
+        documentId,
+        userId,
+        status: document.status,
+      });
       return res.status(409).json({ error: 'Document is still processing' });
     }
 
@@ -209,7 +257,23 @@ router.post('/completions', requireAuth, async (req: Request, res: Response) => 
       ? contextChunks.map((chunk, index) => `Chunk ${index + 1}:\n${chunk.content}`).join('\n\n---\n\n')
       : document.content_text || '';
 
+    logger.info('RAG context prepared', {
+      documentId,
+      userId,
+      documentStatus: document.status,
+      chunkCount: contextChunks.length,
+      contextLength: contextText.length,
+      contentTextLength: document.content_text?.length ?? 0,
+    });
+
     if (!contextText || contextText.trim().length < 20) {
+      logger.warn('RAG chat rejected: document has no extracted text', {
+        documentId,
+        userId,
+        documentStatus: document.status,
+        contentTextLength: document.content_text?.length ?? 0,
+        chunkCount: contextChunks.length,
+      });
       return res.status(422).json({ error: 'Document has no extracted text yet' });
     }
 
