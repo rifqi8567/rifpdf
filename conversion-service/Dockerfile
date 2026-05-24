@@ -10,6 +10,8 @@ RUN apt-get update \
       libreoffice-writer \
       libreoffice-calc \
       libreoffice-impress \
+      fonts-crosextra-caladea \
+      fonts-crosextra-carlito \
       fonts-dejavu \
       fonts-liberation \
       fonts-noto-core \
@@ -26,8 +28,9 @@ RUN pip install -r requirements.txt
 
 COPY app ./app
 COPY worker.py ./worker.py
+COPY fonts/local.conf /etc/fonts/local.conf
 
-RUN mkdir -p /data/conversions
+RUN fc-cache -f -v && mkdir -p /data/conversions
 
 EXPOSE 8000
 
