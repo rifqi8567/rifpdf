@@ -10,8 +10,8 @@ def job_meta_path(job_id: str) -> Path:
     return get_settings().job_dir / f"{job_id}.json"
 
 
-def write_job_meta(job_id: str, **updates: Any) -> dict[str, Any]:
-    path = job_meta_path(job_id)
+def write_job_meta(meta_id: str, **updates: Any) -> dict[str, Any]:
+    path = job_meta_path(meta_id)
     current: dict[str, Any] = {}
     if path.exists():
         current = json.loads(path.read_text(encoding="utf-8"))
