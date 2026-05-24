@@ -6,10 +6,11 @@ import uuid
 from pathlib import Path
 
 from fastapi import FastAPI, File, HTTPException, UploadFile
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, JSONResponse
 from redis import Redis
-from rq import Queue
+from rq import Queue, Retry, Worker
 from rq.job import Job
+from starlette.requests import Request
 
 from .converter import conversion_job, validate_office_file
 from .logging_config import configure_logging
@@ -24,6 +25,26 @@ redis = Redis.from_url(settings.redis_url)
 queue = Queue(settings.queue_name, connection=redis, default_timeout=settings.conversion_timeout_seconds + 30)
 
 app = FastAPI(title="DocuMind Office Conversion Service", version="1.0.0")
+
+
+@app.exception_handler(Exception)
+async def unhandled_exception_handler(request: Request, exc: Exception) -> JSONResponse:
+    request_id = request.headers.get("x-request-id", uuid.uuid4().hex)
+    logger.exception(
+        "conversion_api_unhandled_error request_id=%s method=%s path=%s error=%s",
+        request_id,
+        request.method,
+        request.url.path,
+        exc,
+    )
+    return JSONResponse(
+        status_code=500,
+        content={
+            "error": str(exc) or exc.__class__.__name__,
+            "detail": str(exc) or exc.__class__.__name__,
+            "requestId": request_id,
+        },
+    )
 
 
 def extension_from_name(filename: str) -> str:
@@ -66,13 +87,24 @@ async def persist_upload(file: UploadFile, job_id: str, extension: str) -> Path:
 
 
 @app.get("/health")
-def health() -> dict[str, str | bool]:
+def health() -> dict[str, str | bool | int]:
     try:
         redis.ping()
         redis_ok = True
     except Exception:
         redis_ok = False
-    return {"status": "ok" if redis_ok else "degraded", "redis_connected": redis_ok}
+
+    try:
+        worker_count = len(Worker.all(connection=redis)) if redis_ok else 0
+    except Exception:
+        worker_count = 0
+
+    return {
+        "status": "ok" if redis_ok and worker_count > 0 else "degraded",
+        "redis_connected": redis_ok,
+        "worker_count": worker_count,
+        "queued_jobs": queue.count if redis_ok else 0,
+    }
 
 
 @app.post("/v1/conversions")
@@ -101,7 +133,7 @@ async def create_conversion(file: UploadFile = File(...)) -> dict[str, str]:
         file.filename,
         extension,
         job_id=job_id,
-        retry=1,
+        retry=Retry(max=1),
         result_ttl=3600,
         failure_ttl=24 * 3600,
     )
@@ -165,7 +197,6 @@ async def convert_sync(file: UploadFile = File(...)) -> FileResponse:
         file.filename,
         extension,
         job_id=job_id,
-        retry=0,
         result_ttl=3600,
         failure_ttl=24 * 3600,
     )
