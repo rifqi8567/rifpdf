@@ -365,6 +365,11 @@ export async function convertOfficeToPdf(file: File): Promise<Blob> {
     const detail = Array.isArray(payload?.detail)
       ? payload.detail.map((item: any) => item?.msg || JSON.stringify(item)).join(', ')
       : payload?.detail;
+    const htmlTitle = rawError.match(/<title>(.*?)<\/title>/i)?.[1]?.trim();
+    const htmlHeading = rawError.match(/<h1>(.*?)<\/h1>/i)?.[1]?.trim();
+    const gatewayHint = response.status === 502
+      ? 'Gateway Nginx tidak bisa meneruskan request ke API backend. Cek container api dan nginx di VPS.'
+      : '';
     const routeMissing =
       response.status === 404 &&
       (rawError.includes('Cannot POST') || response.headers.get('content-type')?.includes('text/html'));
@@ -379,12 +384,16 @@ export async function convertOfficeToPdf(file: File): Promise<Blob> {
       payload,
       detail,
       routeMissing,
+      gatewayHint,
       rawError: rawError.slice(0, 2000),
     });
     throw new Error(
       payload?.error ||
       detail ||
+      gatewayHint ||
       routeHint ||
+      htmlHeading ||
+      htmlTitle ||
       rawError.slice(0, 500) ||
       `Gagal mengonversi file Office ke PDF (${response.status})`
     );
