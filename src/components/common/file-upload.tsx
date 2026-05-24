@@ -4,6 +4,7 @@ import { Upload, FileText, X } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { cn, formatFileSize, validateFileType, validateFileSize, ALLOWED_PDF_TYPES, MAX_FILE_SIZE } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
+import { debugAction } from '@/lib/debug';
 
 interface FileUploadProps {
   onFilesAccepted: (files: File[]) => void;
@@ -33,9 +34,18 @@ export function FileUpload({
       const validFiles = acceptedFiles.filter(
         (file) => validateFileType(file, acceptedTypes) && validateFileSize(file, maxSize)
       );
+      debugAction('file-upload', 'files dropped', {
+        acceptedCount: acceptedFiles.length,
+        validCount: validFiles.length,
+        rejectedCount: acceptedFiles.length - validFiles.length,
+        maxSize,
+        maxFiles,
+        acceptedTypes,
+        files: acceptedFiles,
+      });
       onFilesAccepted(validFiles);
     },
-    [acceptedTypes, maxSize, onFilesAccepted]
+    [acceptedTypes, maxFiles, maxSize, onFilesAccepted]
   );
 
   const { getRootProps, getInputProps, isDragActive, isDragReject } = useDropzone({
@@ -116,7 +126,13 @@ export function FileUpload({
                   <Button
                     variant="ghost"
                     size="icon-sm"
-                    onClick={() => onRemoveFile(index)}
+                    onClick={() => {
+                      debugAction('file-upload', 'file removed', {
+                        index,
+                        file,
+                      });
+                      onRemoveFile(index);
+                    }}
                     className="shrink-0"
                   >
                     <X className="h-4 w-4" />

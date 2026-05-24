@@ -21,6 +21,7 @@ import { cn, formatFileSize } from '@/lib/utils';
 import { supabase } from '@/lib/supabase';
 import { useAuthStore } from '@/store/auth-store';
 import type { PDFDocument } from '@/types';
+import { debugAction, debugError } from '@/lib/debug';
 
 const fadeUp = {
   initial: { opacity: 0, y: 20 },
@@ -72,6 +73,7 @@ export default function DashboardPage() {
 
   useEffect(() => {
     if (!user) {
+      debugAction('dashboard', 'documents fetch skipped', { reason: 'missing_user' });
       setDocs([]);
       setIsLoadingDocs(false);
       return;
@@ -81,6 +83,7 @@ export default function DashboardPage() {
 
     const fetchDashboardDocs = async () => {
       setIsLoadingDocs(true);
+      debugAction('dashboard', 'documents fetch start', { userId: user.id });
       const { data, error } = await supabase
         .from('documents')
         .select('*')
@@ -90,9 +93,14 @@ export default function DashboardPage() {
       if (!isMounted) return;
 
       if (error) {
+        debugError('dashboard', 'documents fetch failed', error, { userId: user.id });
         console.error('Failed to load dashboard documents:', error);
         setDocs([]);
       } else {
+        debugAction('dashboard', 'documents fetch success', {
+          userId: user.id,
+          count: data?.length ?? 0,
+        });
         setDocs((data || []) as PDFDocument[]);
       }
 

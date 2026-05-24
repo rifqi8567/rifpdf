@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
+import { debugAction } from '@/lib/debug';
 
 interface ThemeState {
   theme: 'dark' | 'light';
@@ -15,10 +16,12 @@ export const useThemeStore = create<ThemeState>()(
         set((state) => {
           const newTheme = state.theme === 'dark' ? 'light' : 'dark';
           document.documentElement.classList.toggle('dark', newTheme === 'dark');
+          debugAction('theme', 'theme toggled', { from: state.theme, to: newTheme });
           return { theme: newTheme };
         }),
       setTheme: (theme) => {
         document.documentElement.classList.toggle('dark', theme === 'dark');
+        debugAction('theme', 'theme set', { theme });
         set({ theme });
       },
     }),
@@ -27,6 +30,7 @@ export const useThemeStore = create<ThemeState>()(
       onRehydrateStorage: () => (state) => {
         if (state) {
           document.documentElement.classList.toggle('dark', state.theme === 'dark');
+          debugAction('theme', 'theme rehydrated', { theme: state.theme });
         }
       },
     }

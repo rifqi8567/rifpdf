@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Logo } from '@/components/common/logo';
 import { supabase } from '@/lib/supabase';
+import { debugAction, debugError } from '@/lib/debug';
 
 export default function LoginPage() {
   const [showPassword, setShowPassword] = useState(false);
@@ -18,6 +19,7 @@ export default function LoginPage() {
     e.preventDefault();
     setError(null);
     setLoading(true);
+    debugAction('auth', 'login submit', { email });
 
     try {
       if (!supabase?.auth) {
@@ -30,11 +32,13 @@ export default function LoginPage() {
       });
 
       if (signInError) throw signInError;
+      debugAction('auth', 'login success', { email });
       
       // Jika sukses, arahkan ke dashboard
       window.location.href = '/dashboard';
     } catch (err: unknown) {
       const e = err as Error;
+      debugError('auth', 'login failed', e, { email });
       setError(e.message || 'Gagal untuk masuk. Periksa kembali email dan password Anda.');
     } finally {
       setLoading(false);

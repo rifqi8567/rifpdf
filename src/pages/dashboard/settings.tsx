@@ -21,6 +21,8 @@ import { useAuthStore } from '@/store/auth-store';
 import { cn } from '@/lib/utils';
 import { supabase } from '@/lib/supabase';
 import { toast } from 'sonner';
+import { getUserProfile, updateUserProfile } from '@/services/profile';
+import { debugAction, debugError } from '@/lib/debug';
 
 const fadeUp = {
   initial: { opacity: 0, y: 20 },
@@ -49,26 +51,26 @@ export default function SettingsPage() {
     const fetchUser = async () => {
       const { data: { session } } = await supabase.auth.getSession();
       if (session?.user) {
-        // Ambil full_name dari user_metadata
-        const metadataName = session.user.user_metadata?.full_name;
-        const metadataAvatar = session.user.user_metadata?.avatar_url;
+        debugAction('settings', 'profile fetch start', { userId: session.user.id });
+        const profile = await getUserProfile(session.user);
+        debugAction('settings', 'profile fetch success', {
+          userId: profile.id,
+          hasAvatar: Boolean(profile.avatar_url),
+        });
         
-        setFullName(metadataName || user?.full_name || 'User Demo');
-        setEmail(session.user.email || user?.email || 'user@demo.com');
-        setAvatarUrl(metadataAvatar || user?.avatar_url || '');
+        setFullName(profile.full_name || user?.full_name || 'User Demo');
+        setEmail(profile.email || user?.email || 'user@demo.com');
+        setAvatarUrl(profile.avatar_url || user?.avatar_url || '');
         
-        // Update auth store jika belum ada
-        if (!user) {
-          setUser({
-            id: session.user.id,
-            email: session.user.email || '',
-            full_name: metadataName || 'User Demo',
-            avatar_url: metadataAvatar,
-            plan: 'free',
-            credits_remaining: 10,
-            created_at: session.user.created_at,
-            updated_at: session.user.updated_at || session.user.created_at,
-          });
+        if (
+          !user ||
+          user.full_name !== profile.full_name ||
+          user.avatar_url !== profile.avatar_url ||
+          user.email !== profile.email ||
+          user.plan !== profile.plan ||
+          user.credits_remaining !== profile.credits_remaining
+        ) {
+          setUser(profile);
         }
       }
     };
@@ -78,6 +80,7 @@ export default function SettingsPage() {
   const handlePhotoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+    debugAction('settings', 'profile photo selected', { file });
 
     const reader = new FileReader();
     reader.onload = (event) => {
@@ -107,6 +110,14 @@ export default function SettingsPage() {
         
         const dataUrl = canvas.toDataURL('image/jpeg', 0.8);
         setAvatarUrl(dataUrl);
+        debugAction('settings', 'profile photo resized', {
+          fileName: file.name,
+          originalWidth: img.width,
+          originalHeight: img.height,
+          width,
+          height,
+          dataUrlLength: dataUrl.length,
+        });
       };
       img.src = event.target?.result as string;
     };
@@ -115,15 +126,20 @@ export default function SettingsPage() {
 
   const handleSaveProfile = async () => {
     setIsSaving(true);
+    debugAction('settings', 'profile save start', {
+      userId: user?.id,
+      fullName,
+      hasAvatar: Boolean(avatarUrl),
+    });
     try {
-      const { error } = await supabase.auth.updateUser({
-        data: { 
-          full_name: fullName,
-          avatar_url: avatarUrl 
-        }
+      const currentUserId = user?.id || (await supabase.auth.getUser()).data.user?.id;
+      if (!currentUserId) throw new Error('Sesi login tidak ditemukan.');
+
+      await updateUserProfile(currentUserId, fullName, avatarUrl);
+      debugAction('settings', 'profile save success', {
+        userId: currentUserId,
+        hasAvatar: Boolean(avatarUrl),
       });
-      
-      if (error) throw error;
       
       if (user) {
         setUser({ ...user, full_name: fullName, avatar_url: avatarUrl });
@@ -135,6 +151,7 @@ export default function SettingsPage() {
       setTimeout(() => setShowSuccessPopup(false), 3000);
       
     } catch (err: any) {
+      debugError('settings', 'profile save failed', err, { userId: user?.id });
       toast.error(err.message || 'Gagal menyimpan profil.');
     } finally {
       setIsSaving(false);
@@ -144,16 +161,19 @@ export default function SettingsPage() {
   const handleUpdatePassword = async () => {
     if (!newPassword || newPassword.length < 6) {
       toast.error('Password baru minimal 6 karakter.');
+      debugAction('settings', 'password update blocked', { reason: 'too_short' }, 'warn');
       return;
     }
     
     setIsUpdatingPassword(true);
+    debugAction('settings', 'password update start', { userId: user?.id });
     try {
       const { error } = await supabase.auth.updateUser({
         password: newPassword
       });
       
       if (error) throw error;
+      debugAction('settings', 'password update success', { userId: user?.id });
       
       setNewPassword('');
       setSuccessMessage('Password Anda berhasil diperbarui!');
@@ -161,6 +181,7 @@ export default function SettingsPage() {
       setTimeout(() => setShowSuccessPopup(false), 3000);
       
     } catch (err: any) {
+      debugError('settings', 'password update failed', err, { userId: user?.id });
       toast.error(err.message || 'Gagal mengubah password.');
     } finally {
       setIsUpdatingPassword(false);
@@ -344,6 +365,7 @@ export default function SettingsPage() {
                 <button
                   key={lang.code}
                   onClick={() => {
+                    debugAction('settings', 'language changed', { language: lang.code });
                     setLanguage(lang.code as 'id' | 'en');
                     toast.success(`Bahasa diubah ke ${lang.label}`);
                   }}

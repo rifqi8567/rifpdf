@@ -7,6 +7,7 @@ import { Input } from '@/components/ui/input';
 import { Logo } from '@/components/common/logo';
 import { cn } from '@/lib/utils';
 import { supabase } from '@/lib/supabase';
+import { debugAction, debugError } from '@/lib/debug';
 
 export default function RegisterPage() {
   const [showPassword, setShowPassword] = useState(false);
@@ -20,6 +21,7 @@ export default function RegisterPage() {
     e.preventDefault();
     setErrorMessage('');
     setStatus('loading');
+    debugAction('auth', 'register submit', { email, fullName });
 
     try {
       if (!supabase?.auth) {
@@ -37,6 +39,7 @@ export default function RegisterPage() {
       });
 
       if (signUpError) throw signUpError;
+      debugAction('auth', 'register success', { email, fullName });
       
       // Jika sukses daftar, tampilkan popup sukses
       setStatus('success');
@@ -45,6 +48,7 @@ export default function RegisterPage() {
       }, 2000);
     } catch (err: unknown) {
       const e = err as Error;
+      debugError('auth', 'register failed', e, { email, fullName });
       const msg = e.message || '';
       if (msg.toLowerCase().includes('already registered') || msg.toLowerCase().includes('already exists')) {
         setStatus('exists');

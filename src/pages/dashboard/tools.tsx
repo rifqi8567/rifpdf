@@ -41,11 +41,14 @@ import { supabase } from '@/lib/supabase';
 import { useAuthStore } from '@/store/auth-store';
 import { toast } from 'sonner';
 import { analyzeOcrText, convertOfficeToPdf } from '@/services/api';
+import { debugAction } from '@/lib/debug';
 
 // Keep PDF rendering fully client-side without depending on an external CDN.
 pdfjs.GlobalWorkerOptions.workerSrc = '/pdf.worker.min.js';
 
-const logToolDebug = (_label: string, _details: Record<string, unknown>) => undefined;
+const logToolDebug = (label: string, details: Record<string, unknown>) => {
+  debugAction('tools', label, details);
+};
 
 const serializeToolError = (error: unknown) => {
   if (error instanceof Error) {

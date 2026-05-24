@@ -7,6 +7,8 @@ import { useSidebarStore } from '@/store/sidebar-store';
 import { useAuthStore } from '@/store/auth-store';
 import { Badge } from '@/components/ui/badge';
 import { supabase } from '@/lib/supabase';
+import { getUserProfile } from '@/services/profile';
+import { debugAction, debugError } from '@/lib/debug';
 
 export function DashboardHeader() {
   const { setOpen } = useSidebarStore();
@@ -16,14 +18,12 @@ export function DashboardHeader() {
     const initSession = async () => {
       const { data: { session } } = await supabase.auth.getSession();
       if (session?.user && !user) {
-        setUser({
-          id: session.user.id,
-          email: session.user.email || '',
-          full_name: session.user.user_metadata?.full_name || 'User',
-          plan: 'free',
-          credits_remaining: 10,
-          created_at: session.user.created_at,
-          updated_at: session.user.updated_at || session.user.created_at,
+        debugAction('auth', 'session hydrate start', { userId: session.user.id });
+        const profile = await getUserProfile(session.user);
+        setUser(profile);
+        debugAction('auth', 'session hydrate success', {
+          userId: profile.id,
+          hasAvatar: Boolean(profile.avatar_url),
         });
       }
     };
@@ -32,9 +32,12 @@ export function DashboardHeader() {
 
   const handleLogout = async () => {
     try {
+      debugAction('auth', 'logout clicked', { userId: user?.id });
       await supabase.auth.signOut();
+      debugAction('auth', 'logout success', { userId: user?.id });
       window.location.href = '/login';
     } catch (error) {
+      debugError('auth', 'logout failed', error, { userId: user?.id });
       console.error('Error logging out:', error);
     }
   };

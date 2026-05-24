@@ -1,5 +1,6 @@
 import { supabase } from '@/lib/supabase';
 import type { AIModel } from '@/types';
+import { debugAction, debugError } from '@/lib/debug';
 
 interface ChatRequest {
   messages: { role: string; content: string }[];
@@ -25,6 +26,11 @@ export function buildApiUrl(path: string) {
 
 export async function summarizeDocument(documentId: string, model?: AIModel): Promise<string> {
   const { data: { session } } = await supabase.auth.getSession();
+  debugAction('api', 'summarize request start', {
+    documentId,
+    model: model || 'ollama/auto',
+    hasSession: Boolean(session?.access_token),
+  });
 
   const response = await fetch(buildApiUrl(`/api/v1/documents/${documentId}/summary`), {
     method: 'POST',
@@ -39,15 +45,30 @@ export async function summarizeDocument(documentId: string, model?: AIModel): Pr
 
   if (!response.ok) {
     const payload = await response.json().catch(() => null);
+    debugAction('api', 'summarize request failed', {
+      documentId,
+      status: response.status,
+      payload,
+    }, 'error');
     throw new Error(payload?.error || 'Failed to summarize document');
   }
 
   const payload = await response.json();
+  debugAction('api', 'summarize request success', {
+    documentId,
+    summaryLength: String(payload.summary || '').length,
+  });
   return payload.summary;
 }
 
 export async function analyzeOcrText(text: string, fileName: string, model?: AIModel): Promise<string> {
   const { data: { session } } = await supabase.auth.getSession();
+  debugAction('api', 'ocr analyze request start', {
+    fileName,
+    textLength: text.length,
+    model: model || 'ollama/auto',
+    hasSession: Boolean(session?.access_token),
+  });
 
   const response = await fetch(buildApiUrl('/api/v1/ocr/analyze'), {
     method: 'POST',
@@ -64,10 +85,19 @@ export async function analyzeOcrText(text: string, fileName: string, model?: AIM
 
   if (!response.ok) {
     const payload = await response.json().catch(() => null);
+    debugAction('api', 'ocr analyze request failed', {
+      fileName,
+      status: response.status,
+      payload,
+    }, 'error');
     throw new Error(payload?.error || payload?.details || `Gagal menganalisis OCR dengan AI (${response.status})`);
   }
 
   const payload = await response.json();
+  debugAction('api', 'ocr analyze request success', {
+    fileName,
+    analysisLength: String(payload.analysis || '').length,
+  });
   return payload.analysis;
 }
 
@@ -81,8 +111,15 @@ export async function streamChatMessage(
   onChunk: (chunk: string) => void
 ): Promise<void> {
   const { data: { session } } = await supabase.auth.getSession();
+  debugAction('api', 'chat stream request start', {
+    messageCount: request.messages.length,
+    model: request.model || 'ollama/auto',
+    documentId: request.documentContext,
+    hasSession: Boolean(session?.access_token),
+  });
 
   if (!request.documentContext) {
+    debugAction('api', 'chat stream blocked', { reason: 'missing_document' }, 'warn');
     throw new Error('Pilih dokumen terlebih dahulu.');
   }
 
@@ -101,15 +138,25 @@ export async function streamChatMessage(
 
   if (!response.ok) {
     const payload = await response.json().catch(() => null);
+    debugAction('api', 'chat stream request failed', {
+      status: response.status,
+      payload,
+      documentId: request.documentContext,
+    }, 'error');
     throw new Error(payload?.error || payload?.details || `Gagal menghubungi AI server (${response.status})`);
   }
 
   const reader = response.body?.getReader();
   const decoder = new TextDecoder('utf-8');
 
-  if (!reader) return;
+  if (!reader) {
+    debugAction('api', 'chat stream missing reader', { documentId: request.documentContext }, 'warn');
+    return;
+  }
 
   let sseBuffer = '';
+  let chunkCount = 0;
+  let characterCount = 0;
 
   while (true) {
     const { done, value } = await reader.read();
@@ -132,6 +179,8 @@ export async function streamChatMessage(
           const parsed = JSON.parse(data);
           const content = parsed.choices?.[0]?.delta?.content || '';
           if (content) {
+            chunkCount += 1;
+            characterCount += content.length;
             onChunk(content);
           }
         } catch (e) {
@@ -147,12 +196,22 @@ export async function streamChatMessage(
       try {
         const parsed = JSON.parse(data);
         const content = parsed.choices?.[0]?.delta?.content || '';
-        if (content) onChunk(content);
+        if (content) {
+          chunkCount += 1;
+          characterCount += content.length;
+          onChunk(content);
+        }
       } catch (e) {
         console.warn('Error parsing final JSON from SSE', e);
       }
     }
   }
+
+  debugAction('api', 'chat stream completed', {
+    documentId: request.documentContext,
+    chunkCount,
+    characterCount,
+  });
 }
 
 /**
@@ -166,6 +225,7 @@ export async function uploadDocument(file: File): Promise<{ url: string; path: s
   const fileExt = file.name.split('.').pop();
   const fileName = `${crypto.randomUUID()}.${fileExt}`;
   const filePath = `${user.id}/${fileName}`;
+  debugAction('api', 'document upload start', { userId: user.id, file, filePath });
 
   const { error: uploadError } = await supabase.storage
     .from('documents')
@@ -175,12 +235,16 @@ export async function uploadDocument(file: File): Promise<{ url: string; path: s
       contentType: file.type,
     });
 
-  if (uploadError) throw uploadError;
+  if (uploadError) {
+    debugError('api', 'document upload failed', uploadError, { userId: user.id, filePath });
+    throw uploadError;
+  }
 
   const { data: urlData } = supabase.storage
     .from('documents')
     .getPublicUrl(filePath);
 
+  debugAction('api', 'document upload success', { userId: user.id, filePath });
   return { url: urlData.publicUrl, path: filePath };
 }
 
@@ -195,6 +259,7 @@ export async function saveDocumentMetadata(doc: {
 }) {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) throw new Error('Not authenticated');
+  debugAction('api', 'document metadata save start', { userId: user.id, doc });
 
   const { data, error } = await supabase
     .from('documents')
@@ -209,7 +274,11 @@ export async function saveDocumentMetadata(doc: {
     .select()
     .single();
 
-  if (error) throw error;
+  if (error) {
+    debugError('api', 'document metadata save failed', error, { userId: user.id, doc });
+    throw error;
+  }
+  debugAction('api', 'document metadata save success', { userId: user.id, documentId: data.id });
   return data;
 }
 
@@ -217,12 +286,17 @@ export async function saveDocumentMetadata(doc: {
  * Get user's documents.
  */
 export async function getUserDocuments() {
+  debugAction('api', 'documents list start');
   const { data, error } = await supabase
     .from('documents')
     .select('*')
     .order('created_at', { ascending: false });
 
-  if (error) throw error;
+  if (error) {
+    debugError('api', 'documents list failed', error);
+    throw error;
+  }
+  debugAction('api', 'documents list success', { count: data?.length ?? 0 });
   return data;
 }
 
@@ -230,6 +304,7 @@ export async function getUserDocuments() {
  * Delete a document and its file.
  */
 export async function deleteDocument(id: string, filePath: string) {
+  debugAction('api', 'document delete start', { id, filePath });
   await supabase.storage.from('documents').remove([filePath]);
 
   const { error } = await supabase
@@ -237,7 +312,11 @@ export async function deleteDocument(id: string, filePath: string) {
     .delete()
     .eq('id', id);
 
-  if (error) throw error;
+  if (error) {
+    debugError('api', 'document delete failed', error, { id, filePath });
+    throw error;
+  }
+  debugAction('api', 'document delete success', { id, filePath });
 }
 
 /**
@@ -256,7 +335,7 @@ export async function convertOfficeToPdf(file: File): Promise<Blob> {
     hasSession: Boolean(session?.access_token),
     endpoint: buildApiUrl('/api/convert/office-to-pdf'),
   };
-  console.info('[office-conversion] request', debugPayload);
+  debugAction('api', 'office conversion request start', debugPayload);
 
   const response = await fetch(buildApiUrl('/api/convert/office-to-pdf'), {
     method: 'POST',
@@ -266,7 +345,7 @@ export async function convertOfficeToPdf(file: File): Promise<Blob> {
     body: formData,
   });
 
-  console.info('[office-conversion] response', {
+  debugAction('api', 'office conversion response', {
     status: response.status,
     statusText: response.statusText,
     contentType: response.headers.get('content-type'),
@@ -283,18 +362,31 @@ export async function convertOfficeToPdf(file: File): Promise<Blob> {
     const detail = Array.isArray(payload?.detail)
       ? payload.detail.map((item: any) => item?.msg || JSON.stringify(item)).join(', ')
       : payload?.detail;
-    console.error('[office-conversion] failed', {
+    const routeMissing =
+      response.status === 404 &&
+      (rawError.includes('Cannot POST') || response.headers.get('content-type')?.includes('text/html'));
+    const routeHint = routeMissing
+      ? 'Endpoint konversi tidak ditemukan di backend. Pastikan VITE_API_URL mengarah ke Nginx/API gateway tanpa :3000, lalu redeploy/restart backend terbaru.'
+      : '';
+    debugAction('api', 'office conversion failed', {
       ...debugPayload,
       status: response.status,
       payload,
       detail,
+      routeMissing,
       rawError: rawError.slice(0, 2000),
-    });
-    throw new Error(payload?.error || detail || rawError.slice(0, 500) || `Gagal mengonversi file Office ke PDF (${response.status})`);
+    }, 'error');
+    throw new Error(
+      payload?.error ||
+      detail ||
+      routeHint ||
+      rawError.slice(0, 500) ||
+      `Gagal mengonversi file Office ke PDF (${response.status})`
+    );
   }
 
   const blob = await response.blob();
-  console.info('[office-conversion] completed', {
+  debugAction('api', 'office conversion completed', {
     fileName: file.name,
     outputType: blob.type,
     outputSize: blob.size,

@@ -22,6 +22,7 @@ import type { AIModel, PDFDocument } from '@/types';
 import { streamChatMessage, summarizeDocument } from '@/services/api';
 import { supabase } from '@/lib/supabase';
 import { toast } from 'sonner';
+import { debugAction, debugError } from '@/lib/debug';
 
 interface Message {
   id: string;
@@ -68,10 +69,12 @@ export default function ChatPage() {
   useEffect(() => {
     const fetchDocument = async () => {
       if (!documentId) {
+        debugAction('chat', 'document context cleared');
         setActiveDocument(null);
         return;
       }
 
+      debugAction('chat', 'document fetch start', { documentId });
       const { data, error } = await supabase
         .from('documents')
         .select('*')
@@ -79,11 +82,16 @@ export default function ChatPage() {
         .single();
 
       if (error) {
+        debugError('chat', 'document fetch failed', error, { documentId });
         toast.error('Dokumen chat tidak ditemukan.');
         setActiveDocument(null);
         return;
       }
 
+      debugAction('chat', 'document fetch success', {
+        documentId,
+        fileName: data?.name,
+      });
       setActiveDocument(data as PDFDocument);
     };
 
@@ -105,15 +113,23 @@ export default function ChatPage() {
 
   const handleSummarize = async () => {
     if (!documentId) {
+      debugAction('chat', 'summarize blocked', { reason: 'missing_document' }, 'warn');
       toast.warning('Buka chat dari salah satu dokumen terlebih dahulu.');
       return;
     }
 
     setIsSummarizing(true);
+    debugAction('chat', 'summarize start', { documentId, selectedModel });
     try {
       const summary = await summarizeDocument(documentId, selectedModel);
       appendAssistantMessage(summary);
+      debugAction('chat', 'summarize success', {
+        documentId,
+        selectedModel,
+        summaryLength: summary.length,
+      });
     } catch (error: any) {
+      debugError('chat', 'summarize failed', error, { documentId, selectedModel });
       toast.error(error.message || 'Gagal membuat ringkasan dokumen.');
     } finally {
       setIsSummarizing(false);
@@ -121,8 +137,12 @@ export default function ChatPage() {
   };
 
   const handleSend = async () => {
-    if (!input.trim()) return;
+    if (!input.trim()) {
+      debugAction('chat', 'send blocked', { reason: 'empty_input' }, 'warn');
+      return;
+    }
     if (!documentId) {
+      debugAction('chat', 'send blocked', { reason: 'missing_document' }, 'warn');
       toast.warning('Pilih dokumen dari halaman Dokumen Saya untuk memulai chat RAG.');
       return;
     }
@@ -150,6 +170,11 @@ export default function ChatPage() {
     
     setMessages((prev) => [...prev, aiMsg]);
     setIsTyping(false);
+    debugAction('chat', 'send start', {
+      documentId,
+      selectedModel,
+      messageLength: userContent.length,
+    });
 
     try {
       // Map existing UI messages to the API format
@@ -170,8 +195,10 @@ export default function ChatPage() {
           );
         }
       );
+      debugAction('chat', 'send success', { documentId, selectedModel });
     } catch (error: any) {
       console.error('Chat error:', error);
+      debugError('chat', 'send failed', error, { documentId, selectedModel });
       setMessages((prev) => 
         prev.map(msg => 
           msg.id === aiMsgId ? { ...msg, content: error.message || 'Maaf, terjadi kesalahan saat menghubungi server.' } : msg

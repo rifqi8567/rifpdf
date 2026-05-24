@@ -33,6 +33,7 @@ import { PdfThumbnail } from '@/components/common/pdf-thumbnail';
 import { cn, formatFileSize } from '@/lib/utils';
 import type { Folder } from '@/types';
 import { buildApiUrl } from '@/services/api';
+import { debugAction } from '@/lib/debug';
 
 
 
@@ -70,7 +71,9 @@ const getStoragePathCandidates = (value: string) => {
   return Array.from(new Set(candidates.filter(Boolean)));
 };
 
-const logDocumentsDebug = (_label: string, _details: Record<string, unknown>) => undefined;
+const logDocumentsDebug = (label: string, details: Record<string, unknown>) => {
+  debugAction('documents', label, details);
+};
 
 const serializeDebugError = (error: unknown) => {
   if (error instanceof Error) {
@@ -351,9 +354,15 @@ export default function DocumentsPage() {
 
   const handleCreateFolder = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newFolderName.trim() || !user) return;
+    if (!newFolderName.trim() || !user) {
+      logDocumentsDebug('create folder blocked', {
+        reason: !user ? 'missing_user' : 'empty_name',
+      });
+      return;
+    }
     
     setIsCreatingFolder(true);
+    logDocumentsDebug('create folder start', { userId: user.id, name: newFolderName.trim() });
     try {
       const { data, error } = await supabase
         .from('folders')
@@ -366,8 +375,10 @@ export default function DocumentsPage() {
       setFolders(prev => [data as Folder, ...prev]);
       setShowNewFolderModal(false);
       setNewFolderName('');
+      logDocumentsDebug('create folder success', { folderId: data.id, name: data.name });
       toast.success('Folder berhasil dibuat.');
     } catch (err: any) {
+      logDocumentsDebug('create folder failed', { error: serializeDebugError(err) });
       toast.error('Gagal membuat folder: ' + err.message);
     } finally {
       setIsCreatingFolder(false);
@@ -376,15 +387,30 @@ export default function DocumentsPage() {
 
   const confirmRenameDoc = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!docToRename || !newDocName.trim()) return;
+    if (!docToRename || !newDocName.trim()) {
+      logDocumentsDebug('rename document blocked', {
+        reason: !docToRename ? 'missing_document' : 'empty_name',
+      });
+      return;
+    }
     
+    logDocumentsDebug('rename document start', {
+      docId: docToRename.id,
+      from: docToRename.name,
+      to: newDocName.trim(),
+    });
     try {
       const { error } = await supabase.from('documents').update({ name: newDocName.trim() }).eq('id', docToRename.id);
       if (error) throw error;
       
       setDocs(prev => prev.map(d => d.id === docToRename.id ? { ...d, name: newDocName.trim() } : d));
+      logDocumentsDebug('rename document success', { docId: docToRename.id });
       toast.success('Nama dokumen berhasil diubah.');
     } catch (err: any) {
+      logDocumentsDebug('rename document failed', {
+        docId: docToRename.id,
+        error: serializeDebugError(err),
+      });
       toast.error('Gagal mengubah nama dokumen: ' + err.message);
     } finally {
       setDocToRename(null);
@@ -394,8 +420,18 @@ export default function DocumentsPage() {
 
   const confirmRenameFolder = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!folderToRename || !newFolderNameEdit.trim()) return;
+    if (!folderToRename || !newFolderNameEdit.trim()) {
+      logDocumentsDebug('rename folder blocked', {
+        reason: !folderToRename ? 'missing_folder' : 'empty_name',
+      });
+      return;
+    }
     
+    logDocumentsDebug('rename folder start', {
+      folderId: folderToRename.id,
+      from: folderToRename.name,
+      to: newFolderNameEdit.trim(),
+    });
     try {
       const { error } = await supabase.from('folders').update({ name: newFolderNameEdit.trim() }).eq('id', folderToRename.id);
       if (error) throw error;
@@ -404,8 +440,13 @@ export default function DocumentsPage() {
       if (currentFolder?.id === folderToRename.id) {
         setCurrentFolder({ ...currentFolder, name: newFolderNameEdit.trim() });
       }
+      logDocumentsDebug('rename folder success', { folderId: folderToRename.id });
       toast.success('Nama folder berhasil diubah.');
     } catch (err: any) {
+      logDocumentsDebug('rename folder failed', {
+        folderId: folderToRename.id,
+        error: serializeDebugError(err),
+      });
       toast.error('Gagal mengubah nama folder: ' + err.message);
     } finally {
       setFolderToRename(null);
@@ -415,6 +456,10 @@ export default function DocumentsPage() {
 
   const confirmDeleteFolder = async () => {
     if (!folderToDelete) return;
+    logDocumentsDebug('delete folder start', {
+      folderId: folderToDelete.id,
+      name: folderToDelete.name,
+    });
     try {
       const { error } = await supabase.from('folders').delete().eq('id', folderToDelete.id);
       if (error) throw error;
@@ -423,15 +468,23 @@ export default function DocumentsPage() {
       if (currentFolder?.id === folderToDelete.id) {
         setCurrentFolder(null);
       }
+      logDocumentsDebug('delete folder success', { folderId: folderToDelete.id });
       toast.success('Folder berhasil dihapus.');
     } catch (err: any) {
+      logDocumentsDebug('delete folder failed', {
+        folderId: folderToDelete.id,
+        error: serializeDebugError(err),
+      });
       toast.error('Gagal menghapus folder: ' + err.message);
     } finally {
       setFolderToDelete(null);
     }
   };
 
-  const handleChat = (docId: string) => navigate(`/dashboard/chat?doc=${docId}`);
+  const handleChat = (docId: string) => {
+    logDocumentsDebug('chat clicked', { docId });
+    navigate(`/dashboard/chat?doc=${docId}`);
+  };
   
   const getSignedUrl = async (fileUrl: string) => {
     const candidates = getStoragePathCandidates(fileUrl);
@@ -569,11 +622,17 @@ export default function DocumentsPage() {
   };
   
   const handleDelete = (doc: PDFDocument) => {
+    logDocumentsDebug('delete document dialog opened', { docId: doc.id, name: doc.name });
     setDocToDelete(doc);
   };
 
   const confirmDelete = async () => {
     if (!docToDelete) return;
+    logDocumentsDebug('delete document start', {
+      docId: docToDelete.id,
+      name: docToDelete.name,
+      fileUrl: docToDelete.file_url,
+    });
     try {
       // Hapus fisik file dari Storage
       await supabase.storage.from('documents').remove([docToDelete.file_url]);
@@ -583,8 +642,13 @@ export default function DocumentsPage() {
       if (error) throw error;
       
       setDocs(prev => prev.filter(d => d.id !== docToDelete.id));
+      logDocumentsDebug('delete document success', { docId: docToDelete.id });
       toast.success('Dokumen berhasil dihapus.');
     } catch (err: any) {
+      logDocumentsDebug('delete document failed', {
+        docId: docToDelete.id,
+        error: serializeDebugError(err),
+      });
       toast.error('Gagal menghapus dokumen: ' + err.message);
     } finally {
       setDocToDelete(null);

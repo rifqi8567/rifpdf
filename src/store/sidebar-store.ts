@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { debugAction } from '@/lib/debug';
 
 interface SidebarState {
   isOpen: boolean;
@@ -11,7 +12,18 @@ interface SidebarState {
 export const useSidebarStore = create<SidebarState>()((set) => ({
   isOpen: false,
   isCollapsed: false,
-  toggle: () => set((state) => ({ isOpen: !state.isOpen })),
-  setOpen: (isOpen) => set({ isOpen }),
-  setCollapsed: (isCollapsed) => set({ isCollapsed }),
+  toggle: () =>
+    set((state) => {
+      const isOpen = !state.isOpen;
+      debugAction('sidebar', 'sidebar toggled', { from: state.isOpen, to: isOpen });
+      return { isOpen };
+    }),
+  setOpen: (isOpen) => {
+    debugAction('sidebar', 'sidebar open set', { isOpen });
+    set({ isOpen });
+  },
+  setCollapsed: (isCollapsed) => {
+    debugAction('sidebar', 'sidebar collapsed set', { isCollapsed });
+    set({ isCollapsed });
+  },
 }));

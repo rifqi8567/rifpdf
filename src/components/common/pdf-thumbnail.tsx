@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import * as pdfjs from 'pdfjs-dist';
 import { FileText, Loader2 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
+import { debugAction } from '@/lib/debug';
 
 // Keep PDF thumbnails on the same bundled worker used by the tool pages.
 pdfjs.GlobalWorkerOptions.workerSrc = '/pdf.worker.min.js';
@@ -39,7 +40,9 @@ const getStoragePathCandidates = (value: string) => {
   return Array.from(new Set(candidates.filter(Boolean)));
 };
 
-const logThumbnailDebug = (_label: string, _details: Record<string, unknown>) => undefined;
+const logThumbnailDebug = (label: string, details: Record<string, unknown>) => {
+  debugAction('thumbnail', label, details);
+};
 
 const serializeError = (error: unknown) => {
   if (error instanceof Error) {
