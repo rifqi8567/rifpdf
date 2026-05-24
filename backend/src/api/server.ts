@@ -58,18 +58,37 @@ app.use('/api/v1', apiLimiter, summaryRouter);
 // 3. Initialize Background Cron Jobs
 initCronJobs();
 
+const sanitizeRequestBody = (body: unknown) => {
+  if (!body || typeof body !== 'object') return body;
+
+  return Object.fromEntries(
+    Object.entries(body as Record<string, unknown>).map(([key, value]) => {
+      if (/token|password|secret|key/i.test(key)) return [key, '[redacted]'];
+      if (typeof value === 'string' && value.length > 500) return [key, `${value.slice(0, 500)}...`];
+      return [key, value];
+    })
+  );
+};
+
 // Global Error Handler
 app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
   const requestId = req.headers['x-request-id'] || `${Date.now()}-${Math.random().toString(16).slice(2)}`;
-  logger.error('Unhandled Exception:', {
+  const errorPayload = {
     requestId,
     method: req.method,
     path: req.originalUrl,
+    status: err?.status || 500,
+    userId: req.user?.id,
+    body: sanitizeRequestBody(req.body),
     errorName: err?.name,
     errorCode: err?.code,
     errorMessage: err?.message,
     errorStack: err?.stack,
-  });
+  };
+
+  logger.error('Unhandled Exception:', errorPayload);
+  console.error('[Unhandled Exception JSON]', JSON.stringify(errorPayload));
+
   res.status(err?.status || 500).json({
     error: err?.message || 'Internal Server Error',
     code: err?.code,

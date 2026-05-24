@@ -70,17 +70,37 @@ router.post('/documents/process', requireAuth, async (req, res) => {
     return res.status(400).json({ error: 'Invalid document storage path' });
   }
 
-  const job = await documentQueue.add('process-pdf', {
-    documentId,
-    fileUrl: document.file_url,
-    userId
-  }, {
-    jobId: `process:${documentId}`,
-    attempts: 3,
-    backoff: { type: 'exponential', delay: 2000 },
-    removeOnComplete: { age: 3600, count: 100 },
-    removeOnFail: { age: 24 * 3600, count: 100 },
-  });
+  let job;
+  try {
+    job = await documentQueue.add('process-pdf', {
+      documentId,
+      fileUrl: document.file_url,
+      userId
+    }, {
+      jobId: `process:${documentId}`,
+      attempts: 3,
+      backoff: { type: 'exponential', delay: 2000 },
+      removeOnComplete: { age: 3600, count: 100 },
+      removeOnFail: { age: 24 * 3600, count: 100 },
+    });
+  } catch (queueError: any) {
+    logger.error('Document processing enqueue failed', {
+      documentId,
+      userId,
+      fileUrl: document.file_url,
+      queueName: DOCUMENT_PROCESSING_QUEUE,
+      errorName: queueError?.name,
+      errorMessage: queueError?.message,
+      errorCode: queueError?.code,
+      errorStack: queueError?.stack,
+    });
+
+    return res.status(503).json({
+      error: 'Failed to add document to processing queue',
+      details: queueError?.message || 'Unknown queue error',
+      hint: 'Cek Redis dan worker di VPS. BullMQ membutuhkan Redis maxmemory-policy noeviction.',
+    });
+  }
 
   logger.info('Document processing job enqueued', {
     documentId,
