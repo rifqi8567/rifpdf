@@ -59,11 +59,9 @@ def normalize_docx_header_drawings_for_libreoffice(source: Path, job_id: str, wo
     with zipfile.ZipFile(source, "r") as zin, zipfile.ZipFile(normalized, "w", compression=zipfile.ZIP_DEFLATED) as zout:
         for item in zin.infolist():
             data = zin.read(item.filename)
-            is_header_or_footer = (
-                item.filename.startswith("word/header") or item.filename.startswith("word/footer")
-            ) and item.filename.endswith(".xml")
+            is_header = item.filename.startswith("word/header") and item.filename.endswith(".xml")
 
-            if is_header_or_footer:
+            if is_header:
                 try:
                     root = ET.fromstring(data)
                     changed = False
@@ -145,7 +143,7 @@ def convert_to_pdf(job_id: str, input_path: str, original_filename: str, extensi
     profile_dir = work_dir / "lo-profile"
     out_dir.mkdir(parents=True, exist_ok=True)
     profile_dir.mkdir(parents=True, exist_ok=True)
-    if extension == "docx":
+    if extension == "docx" and settings.normalize_docx_header_shapes:
         source = normalize_docx_header_drawings_for_libreoffice(source, job_id, work_dir)
         validate_office_file(source, extension)
 

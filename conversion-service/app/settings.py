@@ -14,6 +14,7 @@ class Settings(BaseSettings):
     max_upload_mb: int = 50
     conversion_timeout_seconds: int = 120
     cleanup_retention_hours: int = 24
+    normalize_docx_header_shapes: bool = True
     allowed_extensions: set[str] = {"docx", "xlsx", "pptx"}
 
     @property
