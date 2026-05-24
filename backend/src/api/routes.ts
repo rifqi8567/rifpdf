@@ -77,7 +77,7 @@ router.post('/documents/process', requireAuth, async (req, res) => {
       fileUrl: document.file_url,
       userId
     }, {
-      jobId: `process:${documentId}`,
+      jobId: `process-${documentId}`,
       attempts: 3,
       backoff: { type: 'exponential', delay: 2000 },
       removeOnComplete: { age: 3600, count: 100 },
