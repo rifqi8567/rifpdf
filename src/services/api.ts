@@ -368,14 +368,16 @@ export async function convertOfficeToPdf(file: File): Promise<Blob> {
     const routeHint = routeMissing
       ? 'Endpoint konversi tidak ditemukan di backend. Pastikan VITE_API_URL mengarah ke Nginx/API gateway tanpa :3000, lalu redeploy/restart backend terbaru.'
       : '';
-    debugAction('api', 'office conversion failed', {
+    debugError('api', 'office conversion failed', new Error(payload?.error || detail || response.statusText), {
       ...debugPayload,
       status: response.status,
+      statusText: response.statusText,
+      contentType: response.headers.get('content-type'),
       payload,
       detail,
       routeMissing,
       rawError: rawError.slice(0, 2000),
-    }, 'error');
+    });
     throw new Error(
       payload?.error ||
       detail ||

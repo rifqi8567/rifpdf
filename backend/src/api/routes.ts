@@ -166,12 +166,23 @@ const forwardOfficeConversion = async (req: Request, res: Response) => {
 
     if (!response.ok) {
       const errText = await response.text().catch(() => 'Unknown error');
+      let conversionPayload: any = null;
+      try {
+        conversionPayload = errText ? JSON.parse(errText) : null;
+      } catch {
+        conversionPayload = null;
+      }
+
       logger.warn(`Conversion service returned ${response.status}: ${errText}`, {
         requestId,
         originalName: req.file.originalname,
         size: req.file.size,
       });
-      res.status(response.status).type('application/json').send(errText);
+      res.status(response.status).json({
+        error: conversionPayload?.error || conversionPayload?.detail || 'Conversion service failed',
+        details: conversionPayload?.detail || errText.slice(0, 2000),
+        requestId,
+      });
       return;
     }
 
@@ -195,7 +206,11 @@ const forwardOfficeConversion = async (req: Request, res: Response) => {
       size: req.file?.size,
       conversionServiceUrl: env.CONVERSION_SERVICE_URL,
     });
-    res.status(500).json({ error: `Gagal mengonversi file: ${error.message}` });
+    res.status(500).json({
+      error: `Gagal mengonversi file: ${error.message}`,
+      requestId,
+      conversionServiceUrl: env.CONVERSION_SERVICE_URL,
+    });
   } finally {
     if (uploadedPath) {
       fs.promises.unlink(uploadedPath).catch((error) => {

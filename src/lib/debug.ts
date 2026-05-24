@@ -11,6 +11,11 @@ const isDebugEnabled = () => {
   return import.meta.env.DEV || envEnabled || localFlag === 'true';
 };
 
+const shouldLogError = () => {
+  const envFlag = import.meta.env.VITE_DEBUG_ERRORS;
+  return envFlag !== 'false' && envFlag !== '0';
+};
+
 const cleanDetails = (value: unknown): unknown => {
   if (value instanceof File) {
     return {
@@ -62,5 +67,17 @@ export function debugAction(scope: string, label: string, details: DebugDetails 
 }
 
 export function debugError(scope: string, label: string, error: unknown, details: DebugDetails = {}) {
-  debugAction(scope, label, { ...details, error }, 'error');
+  if (isDebugEnabled()) {
+    debugAction(scope, label, { ...details, error }, 'error');
+    return;
+  }
+
+  if (!shouldLogError()) return;
+
+  const payload = {
+    at: new Date().toISOString(),
+    ...(cleanDetails({ ...details, error }) as DebugDetails),
+  };
+
+  console.error(`[debug:${scope}] ${label}`, payload);
 }
