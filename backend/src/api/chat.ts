@@ -18,11 +18,13 @@ type DocumentChunk = {
   similarity?: number;
 };
 
+const cleanAssistantText = (content: string) => content.replace(/\*\*/g, '');
+
 const writeSseChunk = (res: Response, content: string) => {
   res.write(`data: ${JSON.stringify({
     choices: [
       {
-        delta: { content },
+        delta: { content: cleanAssistantText(content) },
       },
     ],
   })}\n\n`);
@@ -64,13 +66,13 @@ const retrieveContext = async (documentId: string) => {
 const buildSystemPrompt = (documentName: string, contextText: string) => `You are DocuMind AI, an Indonesian-first PDF document assistant.
 Answer using only the provided document context. If the answer is not found in the context, say that it is not available in the document.
 Be warm, helpful, and concise. Use Indonesian by default unless the user asks otherwise.
-Format answers with clean Markdown:
+Format answers neatly:
 - Start with a short friendly sentence and 1 relevant emoji.
-- Use bold sparingly only for short section labels, not inside every sentence.
 - Use numbered lists or bullets for multi-point answers.
 - Use light emoji section markers such as 📌, ✅, ⚠️, 📝 only when helpful.
 - Do not overuse emoji; keep it professional.
-- Never output raw markdown markers incorrectly; if unsure, use plain text.
+- Do not use markdown bold markers like **.
+- Use plain labels such as "Tanggal:", "Lokasi:", and "Aturan:".
 
 Document name: ${documentName}
 

@@ -6,6 +6,8 @@ import { env } from '../config/env';
 
 const router = Router();
 
+const cleanAssistantText = (content: string) => content.replace(/\*\*/g, '');
+
 async function generateWithOpenRouter(model: string, messages: { role: string; content: string }[]) {
   if (!env.OPENROUTER_API_KEY) {
     throw new Error('OPENROUTER_API_KEY is not configured');
@@ -33,7 +35,8 @@ async function generateWithOpenRouter(model: string, messages: { role: string; c
   }
 
   const payload = await aiResponse.json() as any;
-  return payload.choices?.[0]?.message?.content as string | undefined;
+  const content = payload.choices?.[0]?.message?.content as string | undefined;
+  return content ? cleanAssistantText(content) : content;
 }
 
 router.post('/documents/:documentId/summary', requireAuth, async (req: Request, res: Response) => {
@@ -78,7 +81,7 @@ router.post('/documents/:documentId/summary', requireAuth, async (req: Request, 
   const messages = [
     {
       role: 'system',
-      content: 'You summarize documents accurately. Use Indonesian by default. Do not invent facts not present in the context. Format neatly with short section labels, bullets, and a few helpful emoji section markers like 📌, ✅, or ⚠️. Use bold sparingly only for short labels, not inside every sentence.',
+      content: 'You summarize documents accurately. Use Indonesian by default. Do not invent facts not present in the context. Format neatly with short plain labels, bullets, and a few helpful emoji section markers like 📌, ✅, or ⚠️. Do not use markdown bold markers like **.',
     },
     {
       role: 'user',
@@ -122,7 +125,7 @@ router.post('/ocr/analyze', requireAuth, async (req: Request, res: Response) => 
   const messages = [
     {
       role: 'system',
-      content: 'Anda analis dokumen OCR. Jawab dalam bahasa Indonesia yang jelas, rapi, dan praktis. Gunakan hanya informasi dari teks OCR. Jika ada bagian yang tidak jelas, sebutkan sebagai kemungkinan salah baca OCR. Format rapi dengan label singkat, bullet, dan emoji secukupnya. Gunakan bold seperlunya saja.',
+      content: 'Anda analis dokumen OCR. Jawab dalam bahasa Indonesia yang jelas, rapi, dan praktis. Gunakan hanya informasi dari teks OCR. Jika ada bagian yang tidak jelas, sebutkan sebagai kemungkinan salah baca OCR. Format rapi dengan label singkat, bullet, dan emoji secukupnya. Jangan gunakan markdown bold marker seperti **.',
     },
     {
       role: 'user',
