@@ -11,6 +11,7 @@ import {
   Sparkles,
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { useTranslation } from '@/lib/i18n';
 
 const fadeUp = {
   initial: { opacity: 0, y: 20 },
@@ -21,27 +22,11 @@ const staggerContainer = {
   animate: { transition: { staggerChildren: 0.1 } }
 };
 
-const faqs = [
-  {
-    q: "Apakah data dokumen saya aman?",
-    a: "Sangat aman. Kami menggunakan sistem enkripsi berlapis dan Anda memiliki kontrol penuh atas dokumen yang diunggah. Dokumen tidak akan digunakan untuk melatih AI publik."
-  },
-  {
-    q: "Bagaimana cara kerja fitur Chat dengan PDF?",
-    a: "DocuMind akan mengekstrak teks dari PDF Anda, memprosesnya dengan AI canggih, dan ketika Anda bertanya, AI akan mencari informasi paling relevan dari dokumen Anda untuk memberikan jawaban yang akurat."
-  },
-  {
-    q: "Format file apa saja yang didukung?",
-    a: "Saat ini kami mendukung format PDF, Word (.docx), Excel (.xlsx), dan PowerPoint (.pptx). Anda bisa mengonversi semua format tersebut ke PDF dengan alat bawaan kami."
-  },
-  {
-    q: "Apakah ada batasan jumlah halaman?",
-    a: "Semua fitur sekarang gratis. Batas praktis mengikuti kapasitas server, ukuran file yang diizinkan aplikasi, dan jenis proses dokumen yang sedang dijalankan."
-  }
-];
-
 export default function HelpPage() {
   const [openFaq, setOpenFaq] = useState<number | null>(null);
+  const { t } = useTranslation();
+  const steps = t.helpPage.steps;
+  const faqs = t.helpPage.faqs;
 
   return (
     <div className="p-4 lg:p-6 space-y-8 max-w-4xl mx-auto">
@@ -54,9 +39,9 @@ export default function HelpPage() {
           <div className="inline-flex h-12 w-12 items-center justify-center rounded-2xl gradient-bg shadow-lg">
             <HelpCircle className="h-6 w-6 text-white" />
           </div>
-          <h1 className="text-3xl font-bold">Pusat Bantuan DocuMind</h1>
+          <h1 className="text-3xl font-bold">{t.helpPage.title}</h1>
           <p className="text-muted-foreground text-lg">
-            Temukan panduan, jawaban, dan informasi penting untuk memaksimalkan pengalaman Anda bersama DocuMind AI.
+            {t.helpPage.subtitle}
           </p>
         </div>
         {/* Decorative elements */}
@@ -69,18 +54,18 @@ export default function HelpPage() {
         <Card className="overflow-hidden border-border/50">
           <CardHeader className="bg-surface-2 border-b border-border/50">
             <CardTitle className="flex items-center gap-2 text-xl">
-              <Info className="h-5 w-5 text-primary" /> Apa itu DocuMind AI?
+              <Info className="h-5 w-5 text-primary" /> {t.helpPage.whatTitle}
             </CardTitle>
           </CardHeader>
           <CardContent className="p-6 space-y-4 text-muted-foreground leading-relaxed">
             <p>
-              <strong className="text-foreground">DocuMind AI</strong> adalah asisten dokumen cerdas yang dirancang khusus untuk mempermudah Anda dalam membaca, menganalisis, dan memodifikasi file PDF. 
+              {t.helpPage.whatBody1}
             </p>
             <p>
-              Kami menggabungkan teknologi AI generasi terbaru yang memungkinkan Anda untuk <em>"berbicara"</em> dengan dokumen Anda. Daripada harus membaca ratusan halaman dokumen untuk mencari satu informasi, Anda cukup menanyakannya kepada AI kami dan mendapatkan jawabannya dalam hitungan detik.
+              {t.helpPage.whatBody2}
             </p>
             <p>
-              Selain fitur obrolan AI, kami juga menyediakan beragam perlengkapan PDF (PDF Tools) lengkap seperti konversi dokumen, penggabungan PDF, kompresi, dan tanda tangan digital.
+              {t.helpPage.whatBody3}
             </p>
           </CardContent>
         </Card>
@@ -89,7 +74,7 @@ export default function HelpPage() {
       {/* Tutorial Singkat */}
       <motion.div {...fadeUp} transition={{ delay: 0.2 }}>
         <h2 className="flex items-center gap-2 text-xl font-bold mb-4 px-1">
-          <BookOpen className="h-5 w-5 text-primary" /> Tutorial Menggunakan Web Ini
+          <BookOpen className="h-5 w-5 text-primary" /> {t.helpPage.tutorialTitle}
         </h2>
         <motion.div 
           variants={staggerContainer}
@@ -105,9 +90,9 @@ export default function HelpPage() {
                   <UploadCloud className="h-7 w-7 text-primary" />
                 </div>
                 <div>
-                  <h3 className="font-bold mb-1">1. Unggah Dokumen</h3>
+                  <h3 className="font-bold mb-1">{steps[0][0]}</h3>
                   <p className="text-sm text-muted-foreground">
-                    Pergi ke halaman Dokumen, lalu klik "Upload PDF Baru" untuk memasukkan file yang ingin dianalisis.
+                    {steps[0][1]}
                   </p>
                 </div>
               </CardContent>
@@ -121,9 +106,9 @@ export default function HelpPage() {
                   <Sparkles className="h-7 w-7 text-accent" />
                 </div>
                 <div>
-                  <h3 className="font-bold mb-1">2. Biarkan AI Memproses</h3>
+                  <h3 className="font-bold mb-1">{steps[1][0]}</h3>
                   <p className="text-sm text-muted-foreground">
-                    DocuMind akan membaca seluruh konten dokumen Anda secara otomatis. Anda cukup menunggu beberapa detik.
+                    {steps[1][1]}
                   </p>
                 </div>
               </CardContent>
@@ -137,9 +122,9 @@ export default function HelpPage() {
                   <MessageCircle className="h-7 w-7 text-emerald-500" />
                 </div>
                 <div>
-                  <h3 className="font-bold mb-1">3. Mulai Mengobrol</h3>
+                  <h3 className="font-bold mb-1">{steps[2][0]}</h3>
                   <p className="text-sm text-muted-foreground">
-                    Pilih menu Chat dan mulailah bertanya kepada AI mengenai isi dokumen tersebut. Dapatkan jawaban instan!
+                    {steps[2][1]}
                   </p>
                 </div>
               </CardContent>
@@ -153,10 +138,10 @@ export default function HelpPage() {
         <Card className="overflow-hidden">
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-xl">
-              <FileText className="h-5 w-5 text-primary" /> Tanya Jawab (Q&A)
+              <FileText className="h-5 w-5 text-primary" /> {t.helpPage.faqTitle}
             </CardTitle>
             <CardDescription>
-              Pertanyaan yang paling sering ditanyakan oleh pengguna kami.
+              {t.helpPage.faqDescription}
             </CardDescription>
           </CardHeader>
           <CardContent className="p-2 sm:p-6 pt-0 space-y-2">
@@ -169,7 +154,7 @@ export default function HelpPage() {
                   onClick={() => setOpenFaq(openFaq === i ? null : i)}
                   className="flex items-center justify-between w-full p-4 sm:px-6 text-left hover:bg-surface-2 transition-colors focus:outline-none"
                 >
-                  <span className="font-medium">{faq.q}</span>
+                  <span className="font-medium">{faq[0]}</span>
                   <motion.div
                     animate={{ rotate: openFaq === i ? 180 : 0 }}
                     transition={{ duration: 0.2 }}
@@ -187,7 +172,7 @@ export default function HelpPage() {
                       className="overflow-hidden"
                     >
                       <div className="p-4 sm:px-6 pt-0 text-sm text-muted-foreground leading-relaxed border-t border-border/50 bg-background/50">
-                        {faq.a}
+                        {faq[1]}
                       </div>
                     </motion.div>
                   )}

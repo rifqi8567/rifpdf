@@ -24,6 +24,7 @@ import { streamChatMessage, summarizeDocument } from '@/services/api';
 import { supabase } from '@/lib/supabase';
 import { toast } from 'sonner';
 import { debugAction, debugError } from '@/lib/debug';
+import { useTranslation } from '@/lib/i18n';
 
 interface Message {
   id: string;
@@ -42,13 +43,6 @@ const initialMessages: Message[] = [
     model: 'OpenRouter Free',
     timestamp: new Date(),
   },
-];
-
-const suggestedQuestions = [
-  'Ringkas dokumen ini dalam 5 poin utama',
-  'Apa topik utama yang dibahas?',
-  'Buatkan analisis SWOT dari dokumen ini',
-  'Terjemahkan bagian penting ke Bahasa Inggris',
 ];
 
 const renderInlineMarkdown = (text: string) => {
@@ -106,6 +100,7 @@ const renderAssistantMarkdown = (content: string) => {
 };
 
 export default function ChatPage() {
+  const { t } = useTranslation();
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const documentId = searchParams.get('doc');
@@ -124,6 +119,14 @@ export default function ChatPage() {
   }, [messages, isTyping]);
 
   useEffect(() => {
+    setMessages((current) =>
+      current.length === 1 && current[0].id === '1'
+        ? [{ ...current[0], content: t.chatPage.initialMessage }]
+        : current
+    );
+  }, [t.chatPage.initialMessage]);
+
+  useEffect(() => {
     const fetchDocument = async () => {
       if (!documentId) {
         debugAction('chat', 'document context cleared');
@@ -140,7 +143,7 @@ export default function ChatPage() {
 
       if (error) {
         debugError('chat', 'document fetch failed', error, { documentId });
-        toast.error('Dokumen chat tidak ditemukan.');
+        toast.error(t.chatPage.documentNotFound);
         setActiveDocument(null);
         return;
       }
@@ -171,7 +174,7 @@ export default function ChatPage() {
   const handleSummarize = async () => {
     if (!documentId) {
       debugAction('chat', 'summarize blocked', { reason: 'missing_document' }, 'warn');
-      toast.warning('Buka chat dari salah satu dokumen terlebih dahulu.');
+      toast.warning(t.chatPage.openDocumentFirst);
       return;
     }
 
@@ -196,14 +199,14 @@ export default function ChatPage() {
           {
             id: crypto.randomUUID(),
             role: 'assistant',
-            content: '📷 Dokumen ini belum bisa diringkas karena tampaknya berupa scan/foto dan belum punya teks yang terbaca.\n\nJalankan OCR Scanner dulu untuk mengekstrak teksnya.',
+            content: t.chatPage.ocrNeededSummary,
             model: AI_MODELS[selectedModel].name,
             action: 'ocr',
             timestamp: new Date(),
           },
         ]);
       } else {
-        toast.error(error.message || 'Gagal membuat ringkasan dokumen.');
+        toast.error(error.message || t.chatPage.summaryFailed);
       }
     } finally {
       setIsSummarizing(false);
@@ -213,7 +216,7 @@ export default function ChatPage() {
   const handleSend = async () => {
     if (isTyping) {
       debugAction('chat', 'send blocked', { reason: 'request_in_progress' }, 'warn');
-      toast.warning('Tunggu jawaban AI selesai dulu.');
+      toast.warning(t.chatPage.waitAnswer);
       return;
     }
     if (!input.trim()) {
@@ -222,7 +225,7 @@ export default function ChatPage() {
     }
     if (!documentId) {
       debugAction('chat', 'send blocked', { reason: 'missing_document' }, 'warn');
-      toast.warning('Pilih dokumen dari halaman Dokumen Saya untuk memulai chat RAG.');
+      toast.warning(t.chatPage.chooseDocumentToast);
       return;
     }
 
@@ -280,7 +283,7 @@ export default function ChatPage() {
       if (!receivedContent) {
         setMessages((prev) => 
           prev.map(msg => 
-            msg.id === aiMsgId ? { ...msg, content: 'AI belum mengirim isi jawaban. Coba kirim ulang atau pilih OpenRouter Free.' } : msg
+            msg.id === aiMsgId ? { ...msg, content: t.chatPage.emptyAi } : msg
           )
         );
       }
@@ -296,8 +299,8 @@ export default function ChatPage() {
             ? {
                 ...msg,
                 content: needsOcr
-                  ? '📷 Dokumen ini sepertinya berupa scan/foto, jadi AI belum menemukan teks yang bisa dibaca.\n\nJalankan OCR Scanner dulu untuk mengekstrak teks dari gambar/PDF scan, lalu hasil OCR bisa kamu analisis dengan AI.'
-                  : error.message || 'Maaf, terjadi kesalahan saat menghubungi server.',
+                  ? t.chatPage.ocrNeededChat
+                  : error.message || t.chatPage.serverError,
                 action: needsOcr ? 'ocr' : undefined,
               }
             : msg
@@ -324,9 +327,9 @@ export default function ChatPage() {
             <Sparkles className="h-4 w-4 text-white" />
           </div>
           <div>
-            <h2 className="text-sm font-semibold">AI Chat PDF</h2>
+            <h2 className="text-sm font-semibold">{t.chatPage.title}</h2>
             <p className="text-xs text-muted-foreground">
-              {activeDocument ? activeDocument.name : 'Buka dari Dokumen Saya untuk memilih konteks'}
+              {activeDocument ? activeDocument.name : t.chatPage.noContext}
             </p>
           </div>
         </div>
@@ -341,7 +344,7 @@ export default function ChatPage() {
             className="gap-2"
           >
             {isSummarizing ? <Loader2 className="h-3 w-3 animate-spin" /> : <Sparkles className="h-3 w-3" />}
-            <span className="hidden sm:inline">Ringkas</span>
+            <span className="hidden sm:inline">{t.chatPage.summarize}</span>
           </Button>
           <Button
             variant="outline"
@@ -428,7 +431,7 @@ export default function ChatPage() {
                     onClick={() => navigate('/dashboard/tools/ocr')}
                   >
                     <ScanLine className="h-4 w-4" />
-                    Buka OCR Scanner
+                    {t.chatPage.openOcr}
                   </Button>
                 )}
 
@@ -492,7 +495,7 @@ export default function ChatPage() {
       {messages.length <= 1 && (
         <div className="px-4 pb-3">
           <div className="flex flex-wrap gap-2">
-            {suggestedQuestions.map((q) => (
+            {t.chatPage.suggestions.map((q) => (
               <button
                 key={q}
                 onClick={() => {
@@ -513,7 +516,7 @@ export default function ChatPage() {
         <div className="mx-auto max-w-4xl">
           {!documentId && (
             <div className="mb-3 rounded-xl border border-amber-500/20 bg-amber-500/10 px-3 py-2 text-xs text-amber-300">
-              Pilih dokumen dari halaman Dokumen Saya agar AI memakai konteks PDF yang benar.
+              {t.chatPage.chooseDocumentWarning}
             </div>
           )}
           <div className="flex items-end gap-2 rounded-2xl border border-border bg-surface-2 p-2 focus-within:border-primary/50 transition-colors">
@@ -528,7 +531,7 @@ export default function ChatPage() {
               value={input}
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={handleKeyDown}
-              placeholder="Tanya apa saja tentang PDF Anda..."
+              placeholder={t.chatPage.placeholder}
               rows={1}
               className="flex-1 resize-none bg-transparent text-sm outline-none placeholder:text-muted-foreground max-h-32 py-2"
               style={{ minHeight: '36px' }}
@@ -544,7 +547,7 @@ export default function ChatPage() {
             </Button>
           </div>
           <p className="text-[10px] text-muted-foreground text-center mt-2">
-            DocuMind AI dapat membuat kesalahan. Periksa informasi penting.
+            {t.chatPage.disclaimer}
           </p>
         </div>
       </div>

@@ -5,6 +5,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { cn, formatFileSize, validateFileType, validateFileSize, ALLOWED_PDF_TYPES, MAX_FILE_SIZE } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { debugAction } from '@/lib/debug';
+import { useTranslation } from '@/lib/i18n';
 
 interface FileUploadProps {
   onFilesAccepted: (files: File[]) => void;
@@ -29,6 +30,7 @@ export function FileUpload({
   className,
   label,
 }: FileUploadProps) {
+  const { t } = useTranslation();
   const onDrop = useCallback(
     (acceptedFiles: File[]) => {
       const validFiles = acceptedFiles.filter(
@@ -87,14 +89,14 @@ export function FileUpload({
         </motion.div>
 
         <h3 className="mb-1 max-w-full break-words text-base font-semibold text-foreground">
-          {isDragActive ? 'Lepaskan file di sini' : (label || 'Drag & drop file PDF')}
+          {isDragActive ? t.common.dropHere : (label || t.common.dragPdf)}
         </h3>
         <p className="mb-4 text-sm text-muted-foreground">
-          atau klik untuk memilih file · Maks {formatFileSize(maxSize)}
+          {t.common.clickToChoose} · {t.common.max} {formatFileSize(maxSize)}
         </p>
 
         <Button variant="outline" size="sm" type="button">
-          Pilih File
+          {t.common.chooseFile}
         </Button>
       </motion.div>
 

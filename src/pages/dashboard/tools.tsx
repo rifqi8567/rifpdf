@@ -42,6 +42,7 @@ import { useAuthStore } from '@/store/auth-store';
 import { toast } from 'sonner';
 import { analyzeOcrText, convertOfficeToPdf } from '@/services/api';
 import { debugAction } from '@/lib/debug';
+import { useTranslation } from '@/lib/i18n';
 
 // Keep PDF rendering fully client-side without depending on an external CDN.
 pdfjs.GlobalWorkerOptions.workerSrc = '/pdf.worker.min.js';
@@ -345,6 +346,7 @@ const getQpdfModule = () => {
 export default function ToolPage() {
   const { toolId } = useParams<{ toolId: string }>();
   const navigate = useNavigate();
+  const { language, t } = useTranslation();
   const { user } = useAuthStore();
   const [files, setFiles] = useState<File[]>([]);
   
@@ -396,7 +398,33 @@ export default function ToolPage() {
   // Conversion Mode State
   const [conversionType, setConversionType] = useState<'word-to-pdf' | 'excel-to-pdf' | 'ppt-to-pdf'>('word-to-pdf');
 
-  const tool = toolsConfig[toolId || 'merge'];
+  const baseTool = toolsConfig[toolId || 'merge'];
+  const toolTitle = toolId === 'merge' ? t.nav.merge
+    : toolId === 'split' ? t.nav.split
+    : toolId === 'compress' ? t.nav.compress
+    : toolId === 'sign' ? t.nav.sign
+    : toolId === 'convert' ? t.nav.convert
+    : toolId === 'ocr' ? t.nav.ocr
+    : toolId === 'image-to-pdf' ? t.nav.imageToPdf
+    : toolId === 'rotate' ? t.nav.rotate
+    : toolId === 'protect' ? t.nav.protect
+    : toolId === 'pdf-to-jpg' ? t.nav.pdfToJpg
+    : baseTool.title;
+  const toolDescription = (() => {
+    if (language === 'id') return baseTool.description;
+    if (toolId === 'merge') return 'Combine multiple PDF files into one document';
+    if (toolId === 'split') return 'Split PDF pages into separate files';
+    if (toolId === 'compress') return 'Reduce PDF file size with smart compression';
+    if (toolId === 'sign') return 'Add a digital signature to your PDF document';
+    if (toolId === 'convert') return 'Convert Office files (Word, Excel, PPT) to PDF';
+    if (toolId === 'ocr') return 'Extract text from images and scanned PDFs using AI';
+    if (toolId === 'image-to-pdf') return 'Convert images into a PDF document';
+    if (toolId === 'rotate') return 'Rotate every PDF page directly in the browser';
+    if (toolId === 'protect') return 'Add password protection and watermark metadata to PDFs';
+    if (toolId === 'pdf-to-jpg') return 'Render PDF pages as JPG images in a ZIP file';
+    return baseTool.description;
+  })();
+  const tool = { ...baseTool, title: toolTitle, description: toolDescription };
 
   useEffect(() => {
     // Reset states on tool change
@@ -1829,7 +1857,7 @@ export default function ToolPage() {
         
       if (dbError) throw dbError;
       
-      toast.success('Dokumen berhasil disimpan ke Dashboard!');
+      toast.success(language === 'id' ? 'Dokumen berhasil disimpan ke Dashboard!' : 'Document saved to Dashboard!');
       setShowSuccessModal(false);
       setFiles([]);
       setProcessedBlob(null);
@@ -1844,12 +1872,12 @@ export default function ToolPage() {
   const triggerDownloadAgain = () => {
     if (!processedBlob) return;
     downloadBlob(processedBlob, processedDocName);
-    toast.success('Unduhan dimulai.');
+    toast.success(language === 'id' ? 'Unduhan dimulai.' : 'Download started.');
   };
 
   const downloadSplitOutput = (output: SplitOutput) => {
     downloadBlob(output.blob, output.name);
-    toast.success(`Mengunduh ${output.name}`);
+    toast.success(`${language === 'id' ? 'Mengunduh' : 'Downloading'} ${output.name}`);
   };
 
   // Helper values for dynamic Upload Zone config
@@ -1882,15 +1910,15 @@ export default function ToolPage() {
   };
 
   const getUploadLabel = () => {
-    if (isOcr) return 'Drag & drop PDF scan atau gambar (JPG/PNG/WebP)';
-    if (isImageToPdf) return 'Drag & drop file gambar (JPG/PNG)';
+    if (isOcr) return language === 'id' ? 'Drag & drop PDF scan atau gambar (JPG/PNG/WebP)' : 'Drag & drop scanned PDF or image (JPG/PNG/WebP)';
+    if (isImageToPdf) return language === 'id' ? 'Drag & drop file gambar (JPG/PNG)' : 'Drag & drop image files (JPG/PNG)';
     if (isConvert) {
-      if (conversionType === 'word-to-pdf') return 'Drag & drop file Word (.docx)';
-      if (conversionType === 'excel-to-pdf') return 'Drag & drop file Excel (.xlsx)';
-      if (conversionType === 'ppt-to-pdf') return 'Drag & drop file PowerPoint (.pptx)';
+      if (conversionType === 'word-to-pdf') return language === 'id' ? 'Drag & drop file Word (.docx)' : 'Drag & drop Word files (.docx)';
+      if (conversionType === 'excel-to-pdf') return language === 'id' ? 'Drag & drop file Excel (.xlsx)' : 'Drag & drop Excel files (.xlsx)';
+      if (conversionType === 'ppt-to-pdf') return language === 'id' ? 'Drag & drop file PowerPoint (.pptx)' : 'Drag & drop PowerPoint files (.pptx)';
       return 'Drag & drop file PDF (.pdf)';
     }
-    return 'Drag & drop file PDF';
+    return t.common.dragPdf;
   };
 
   const isPdfOutput = processedDocName.toLowerCase().endsWith('.pdf');
@@ -1924,7 +1952,7 @@ export default function ToolPage() {
               <div className="min-w-0">
                 <h3 className="text-lg font-bold flex items-center gap-2">
                   <Sparkles className="h-5 w-5 text-pink-400" />
-                  Hasil Ekstraksi Teks AI OCR
+                  {language === 'id' ? 'Hasil Ekstraksi Teks AI OCR' : 'AI OCR Text Extraction Result'}
                 </h3>
                 {ocrSummary && (
                   <p className="mt-1 text-xs text-muted-foreground">{ocrSummary}</p>
@@ -1939,7 +1967,7 @@ export default function ToolPage() {
                     toast.success('Teks berhasil disalin ke clipboard!');
                   }}
                 >
-                  Salin Teks
+                  {language === 'id' ? 'Salin Teks' : 'Copy Text'}
                 </Button>
                 <Button
                   variant="outline"
@@ -1947,7 +1975,7 @@ export default function ToolPage() {
                   onClick={() => downloadBlob(new Blob([ocrText], { type: 'text/plain;charset=utf-8' }), `ocr_${Date.now()}.txt`)}
                 >
                   <Download className="h-4 w-4" />
-                  Unduh TXT
+                  {language === 'id' ? 'Unduh TXT' : 'Download TXT'}
                 </Button>
               </div>
             </div>
@@ -1957,7 +1985,7 @@ export default function ToolPage() {
               onChange={(e) => setOcrText(e.target.value)}
             />
             <div className="flex justify-end gap-3">
-              <Button variant="ghost" onClick={() => setIsOcrMode(false)}>Tutup</Button>
+              <Button variant="ghost" onClick={() => setIsOcrMode(false)}>{t.common.close}</Button>
             </div>
           </motion.div>
         )}
@@ -1974,13 +2002,13 @@ export default function ToolPage() {
           >
             <h3 className="text-sm font-bold uppercase tracking-wider text-muted-foreground/80 flex items-center gap-2">
               <Sparkles className="h-4 w-4 text-primary" />
-              Pengaturan {tool.title}
+              {language === 'id' ? 'Pengaturan' : 'Settings'} {tool.title}
             </h3>
 
             {/* CONVERSION CONTROLS */}
             {toolId === 'convert' && (
               <div className="space-y-4">
-                <label className="text-sm font-medium block">Pilih Mode Arah Konversi:</label>
+                <label className="text-sm font-medium block">{language === 'id' ? 'Pilih Mode Arah Konversi:' : 'Choose Conversion Direction:'}</label>
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                   {[
                     { id: 'word-to-pdf', label: 'Word ke PDF', ext: '.docx' },
@@ -2012,16 +2040,16 @@ export default function ToolPage() {
             {toolId === 'ocr' && (
               <div className="grid gap-3 text-sm text-muted-foreground sm:grid-cols-3">
                 <div className="rounded-xl border border-border bg-card p-3">
-                  <p className="font-semibold text-foreground">PDF digital</p>
-                  <p className="mt-1 text-xs leading-5">Teks asli PDF diekstrak langsung tanpa OCR lambat.</p>
+                  <p className="font-semibold text-foreground">{language === 'id' ? 'PDF digital' : 'Digital PDF'}</p>
+                  <p className="mt-1 text-xs leading-5">{language === 'id' ? 'Teks asli PDF diekstrak langsung tanpa OCR lambat.' : 'Native PDF text is extracted directly without slower OCR.'}</p>
                 </div>
                 <div className="rounded-xl border border-border bg-card p-3">
-                  <p className="font-semibold text-foreground">PDF scan</p>
-                  <p className="mt-1 text-xs leading-5">Halaman dirender dan dibaca dengan OCR lokal di browser.</p>
+                  <p className="font-semibold text-foreground">{language === 'id' ? 'PDF scan' : 'Scanned PDF'}</p>
+                  <p className="mt-1 text-xs leading-5">{language === 'id' ? 'Halaman dirender dan dibaca dengan OCR lokal di browser.' : 'Pages are rendered and read with local OCR in the browser.'}</p>
                 </div>
                 <div className="rounded-xl border border-border bg-card p-3">
-                  <p className="font-semibold text-foreground">Gambar</p>
-                  <p className="mt-1 text-xs leading-5">Mendukung JPG, PNG, dan WebP dengan peningkatan kontras.</p>
+                  <p className="font-semibold text-foreground">{language === 'id' ? 'Gambar' : 'Images'}</p>
+                  <p className="mt-1 text-xs leading-5">{language === 'id' ? 'Mendukung JPG, PNG, dan WebP dengan peningkatan kontras.' : 'Supports JPG, PNG, and WebP with contrast enhancement.'}</p>
                 </div>
               </div>
             )}
@@ -2038,7 +2066,7 @@ export default function ToolPage() {
                       onChange={() => setSplitMode('all')}
                       className="accent-primary"
                     />
-                    <span className="text-sm font-medium">Pisah semua halaman</span>
+                    <span className="text-sm font-medium">{language === 'id' ? 'Pisah semua halaman' : 'Split every page'}</span>
                   </label>
                   <label className="flex items-center gap-2 cursor-pointer">
                     <input 
@@ -2048,16 +2076,16 @@ export default function ToolPage() {
                       onChange={() => setSplitMode('groups')}
                       className="accent-primary"
                     />
-                    <span className="text-sm font-medium">Custom grup halaman</span>
+                    <span className="text-sm font-medium">{language === 'id' ? 'Custom grup halaman' : 'Custom page groups'}</span>
                   </label>
                 </div>
                 {splitMode === 'groups' && (
                   <div className="space-y-2">
                     <label className="text-xs text-muted-foreground">
-                      Pisahkan pakai koma. Contoh `1-2,3-4` menjadi 2 PDF. Kalau hanya `1-2`, hasilnya page 1 dan page 2 terpisah.
+                      {language === 'id' ? 'Pisahkan pakai koma. Contoh `1-2,3-4` menjadi 2 PDF. Kalau hanya `1-2`, hasilnya page 1 dan page 2 terpisah.' : 'Separate groups with commas. Example `1-2,3-4` creates 2 PDFs. If you only enter `1-2`, page 1 and page 2 are split separately.'}
                     </label>
                     <Input 
-                      placeholder="Contoh: 1-3,4-6" 
+                      placeholder={language === 'id' ? 'Contoh: 1-3,4-6' : 'Example: 1-3,4-6'}
                       value={splitRange} 
                       onChange={(e) => setSplitRange(e.target.value)}
                       className="w-full sm:max-w-sm"
@@ -2071,7 +2099,7 @@ export default function ToolPage() {
             {toolId === 'compress' && (
               <div className="space-y-5">
                 <div className="space-y-3">
-                  <label className="text-sm font-medium block">Target Kompresi:</label>
+                  <label className="text-sm font-medium block">{language === 'id' ? 'Target Kompresi:' : 'Compression Target:'}</label>
                   <div className="grid gap-3 sm:grid-cols-2">
                     <button
                       type="button"
@@ -2083,8 +2111,8 @@ export default function ToolPage() {
                           : 'border-border bg-card hover:bg-surface-3'
                       )}
                     >
-                      <p className="text-sm font-semibold">Target ukuran file</p>
-                      <p className="mt-1 text-xs text-muted-foreground">Contoh: jadikan sekitar 1 MB.</p>
+                      <p className="text-sm font-semibold">{language === 'id' ? 'Target ukuran file' : 'Target file size'}</p>
+                      <p className="mt-1 text-xs text-muted-foreground">{language === 'id' ? 'Contoh: jadikan sekitar 1 MB.' : 'Example: make it around 1 MB.'}</p>
                     </button>
                     <button
                       type="button"
@@ -2096,15 +2124,15 @@ export default function ToolPage() {
                           : 'border-border bg-card hover:bg-surface-3'
                       )}
                     >
-                      <p className="text-sm font-semibold">Prioritas kualitas</p>
-                      <p className="mt-1 text-xs text-muted-foreground">Optimasi aman tanpa target ukuran tertentu.</p>
+                      <p className="text-sm font-semibold">{language === 'id' ? 'Prioritas kualitas' : 'Quality priority'}</p>
+                      <p className="mt-1 text-xs text-muted-foreground">{language === 'id' ? 'Optimasi aman tanpa target ukuran tertentu.' : 'Safe optimization without a specific size target.'}</p>
                     </button>
                   </div>
                 </div>
 
                 {compressMode === 'target-size' && (
                   <div className="space-y-2">
-                    <label className="text-sm font-medium block">Ingin dijadikan berapa MB?</label>
+                    <label className="text-sm font-medium block">{language === 'id' ? 'Ingin dijadikan berapa MB?' : 'Target size in MB'}</label>
                     <Input
                       type="number"
                       min="0.1"
@@ -2117,7 +2145,7 @@ export default function ToolPage() {
                 )}
 
                 <div className="space-y-3">
-                  <label className="text-sm font-medium block">Kekuatan Optimasi:</label>
+                  <label className="text-sm font-medium block">{language === 'id' ? 'Kekuatan Optimasi:' : 'Optimization Strength:'}</label>
                   <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
                   {(['low', 'medium', 'high'] as const).map((level) => (
                     <button
@@ -2131,14 +2159,14 @@ export default function ToolPage() {
                           : "bg-card hover:bg-surface-3"
                       )}
                     >
-                      <p className="text-sm">{level === 'high' ? 'Maksimal' : level === 'medium' ? 'Rekomendasi' : 'Ringan'}</p>
+                      <p className="text-sm">{level === 'high' ? (language === 'id' ? 'Maksimal' : 'Maximum') : level === 'medium' ? (language === 'id' ? 'Rekomendasi' : 'Recommended') : (language === 'id' ? 'Ringan' : 'Light')}</p>
                     </button>
                   ))}
                   </div>
                 </div>
 
                 <div className="rounded-xl border border-amber-500/20 bg-amber-500/10 p-3 text-xs text-amber-300">
-                  Kompresi browser bersifat lossless. Jika PDF berisi gambar scan besar, target MB yang terlalu kecil butuh kompresi gambar/WASM khusus agar bisa turun drastis.
+                  {language === 'id' ? 'Kompresi browser bersifat lossless. Jika PDF berisi gambar scan besar, target MB yang terlalu kecil butuh kompresi gambar/WASM khusus agar bisa turun drastis.' : 'Browser compression is lossless. If the PDF contains large scanned images, a very small MB target may need special image/WASM compression to shrink much further.'}
                 </div>
               </div>
             )}
@@ -2541,7 +2569,7 @@ export default function ToolPage() {
                 </div>
               </div>
               <div className="space-y-2">
-                <h3 className="text-lg font-bold">Sedang Memproses Dokumen</h3>
+                <h3 className="text-lg font-bold">{language === 'id' ? 'Sedang Memproses Dokumen' : 'Processing Document'}</h3>
                 <p className="text-sm text-muted-foreground animate-pulse">{processingMessage}</p>
               </div>
             </div>
@@ -2589,7 +2617,7 @@ export default function ToolPage() {
                 <div className="space-y-4 text-left border-t border-b border-border py-4">
                   <div className="space-y-2">
                     <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-                      Nama Dokumen Baru
+                      {language === 'id' ? 'Nama Dokumen Baru' : 'New Document Name'}
                     </label>
                     <Input 
                       placeholder="Masukkan nama dokumen..."
@@ -2611,7 +2639,7 @@ export default function ToolPage() {
                           onClick={() => splitOutputs.forEach(downloadSplitOutput)}
                         >
                           <Download className="h-4 w-4 mr-2" />
-                          Unduh Semua
+                          {language === 'id' ? 'Unduh Semua' : 'Download All'}
                         </Button>
                       </div>
 
@@ -2654,14 +2682,14 @@ export default function ToolPage() {
                     <div className="space-y-3">
                     <div className="p-3 rounded-lg bg-surface-2 border border-border flex items-center justify-between">
                       <div className="space-y-0.5 truncate">
-                        <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Detail File</p>
-                        <p className="text-xs text-foreground font-medium">{totalPages} halaman · {formatFileSize(processedBlob.size)}</p>
+                        <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">{language === 'id' ? 'Detail File' : 'File Details'}</p>
+                        <p className="text-xs text-foreground font-medium">{totalPages} {t.common.pages} · {formatFileSize(processedBlob.size)}</p>
                       </div>
                     </div>
                     {isPdfOutput && (
                       <div className="space-y-2">
                         <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                          Preview Hasil Konversi
+                          {language === 'id' ? 'Preview Hasil Konversi' : 'Conversion Result Preview'}
                         </p>
                         <div className="[&>div]:h-[320px] sm:[&>div]:h-[380px] lg:[&>div]:h-[460px]">
                           <LocalPdfFullPreview blob={processedBlob} name={processedDocName} />
@@ -2694,7 +2722,7 @@ export default function ToolPage() {
                     {toolId === 'rotate' && (
                       <div className="space-y-2">
                         <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                          Preview Hasil Rotate
+                          {language === 'id' ? 'Preview Hasil Rotate' : 'Rotate Result Preview'}
                         </p>
                         <div className="[&>div]:h-[320px] sm:[&>div]:h-[380px] lg:[&>div]:h-[460px]">
                           <LocalPdfFullPreview blob={processedBlob} name={processedDocName} />
@@ -2715,7 +2743,7 @@ export default function ToolPage() {
                       disabled={!processedDocName.trim()}
                     >
                       <Download className="h-4 w-4 mr-2" />
-                      Unduh Berkas
+                      {language === 'id' ? 'Unduh Berkas' : 'Download File'}
                     </Button>
                     
                     {user && canSaveToDashboard && (
@@ -2733,7 +2761,7 @@ export default function ToolPage() {
                         ) : (
                           <>
                             <FolderPlus className="h-4 w-4 mr-2" />
-                            Simpan ke Dashboard
+                            {language === 'id' ? 'Simpan ke Dashboard' : 'Save to Dashboard'}
                           </>
                         )}
                       </Button>

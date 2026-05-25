@@ -24,9 +24,25 @@ import { Logo } from '@/components/common/logo';
 import { Button } from '@/components/ui/button';
 import { useSidebarStore } from '@/store/sidebar-store';
 import { Badge } from '@/components/ui/badge';
+import { useTranslation } from '@/lib/i18n';
 
 interface NavItem {
-  label: string;
+  labelKey:
+    | 'dashboard'
+    | 'chat'
+    | 'documents'
+    | 'merge'
+    | 'split'
+    | 'compress'
+    | 'rotate'
+    | 'protect'
+    | 'pdfToJpg'
+    | 'sign'
+    | 'convert'
+    | 'ocr'
+    | 'imageToPdf'
+    | 'settings'
+    | 'help';
   href: string;
   icon: React.ElementType;
   badge?: string;
@@ -34,27 +50,27 @@ interface NavItem {
 }
 
 const mainNavItems: NavItem[] = [
-  { label: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
-  { label: 'AI Chat PDF', href: '/dashboard/chat', icon: MessageSquare, isNew: true },
-  { label: 'Dokumen Saya', href: '/dashboard/documents', icon: FileText },
+  { labelKey: 'dashboard', href: '/dashboard', icon: LayoutDashboard },
+  { labelKey: 'chat', href: '/dashboard/chat', icon: MessageSquare, isNew: true },
+  { labelKey: 'documents', href: '/dashboard/documents', icon: FileText },
 ];
 
 const toolsNavItems: NavItem[] = [
-  { label: 'Merge PDF', href: '/dashboard/tools/merge', icon: Merge },
-  { label: 'Split PDF', href: '/dashboard/tools/split', icon: Scissors },
-  { label: 'Compress PDF', href: '/dashboard/tools/compress', icon: Minimize2 },
-  { label: 'Rotate PDF', href: '/dashboard/tools/rotate', icon: RotateCw },
-  { label: 'Protect PDF', href: '/dashboard/tools/protect', icon: Shield },
-  { label: 'PDF to JPG', href: '/dashboard/tools/pdf-to-jpg', icon: FileImage },
-  { label: 'Tanda Tangan', href: '/dashboard/tools/sign', icon: PenTool },
-  { label: 'Konversi PDF', href: '/dashboard/tools/convert', icon: RefreshCw },
-  { label: 'OCR Scanner', href: '/dashboard/tools/ocr', icon: ScanLine, badge: 'AI' },
-  { label: 'Image to PDF', href: '/dashboard/tools/image-to-pdf', icon: ImageIcon },
+  { labelKey: 'merge', href: '/dashboard/tools/merge', icon: Merge },
+  { labelKey: 'split', href: '/dashboard/tools/split', icon: Scissors },
+  { labelKey: 'compress', href: '/dashboard/tools/compress', icon: Minimize2 },
+  { labelKey: 'rotate', href: '/dashboard/tools/rotate', icon: RotateCw },
+  { labelKey: 'protect', href: '/dashboard/tools/protect', icon: Shield },
+  { labelKey: 'pdfToJpg', href: '/dashboard/tools/pdf-to-jpg', icon: FileImage },
+  { labelKey: 'sign', href: '/dashboard/tools/sign', icon: PenTool },
+  { labelKey: 'convert', href: '/dashboard/tools/convert', icon: RefreshCw },
+  { labelKey: 'ocr', href: '/dashboard/tools/ocr', icon: ScanLine, badge: 'AI' },
+  { labelKey: 'imageToPdf', href: '/dashboard/tools/image-to-pdf', icon: ImageIcon },
 ];
 
 const settingsNavItems: NavItem[] = [
-  { label: 'Pengaturan', href: '/dashboard/settings', icon: Settings },
-  { label: 'Bantuan', href: '/dashboard/help', icon: HelpCircle },
+  { labelKey: 'settings', href: '/dashboard/settings', icon: Settings },
+  { labelKey: 'help', href: '/dashboard/help', icon: HelpCircle },
 ];
 
 function NavSection({
@@ -67,6 +83,7 @@ function NavSection({
   collapsed: boolean;
 }) {
   const location = useLocation();
+  const { t } = useTranslation();
 
   return (
     <div className="space-y-1">
@@ -96,7 +113,7 @@ function NavSection({
             />
             {!collapsed && (
               <>
-                <span className="flex-1 truncate">{item.label}</span>
+                <span className="flex-1 truncate">{t.nav[item.labelKey]}</span>
                 {item.isNew && <Badge variant="gradient" className="text-[10px] px-1.5 py-0">NEW</Badge>}
                 {item.badge && <Badge variant="default" className="text-[10px] px-1.5 py-0">{item.badge}</Badge>}
               </>
@@ -117,6 +134,8 @@ function NavSection({
 
 export function Sidebar() {
   const { isOpen, isCollapsed, setOpen, setCollapsed } = useSidebarStore();
+  const { t } = useTranslation();
+  const sidebarWidth = isCollapsed ? 68 : 260;
 
   return (
     <>
@@ -138,12 +157,12 @@ export function Sidebar() {
         className={cn(
           'fixed top-0 left-0 z-50 flex h-full flex-col border-r border-sidebar-border bg-sidebar',
           'lg:relative lg:z-auto',
-          isCollapsed ? 'w-[68px]' : 'w-[260px]',
+          isCollapsed ? 'w-[260px] lg:w-[68px]' : 'w-[260px]',
         )}
         initial={false}
         animate={{
           x: isOpen ? 0 : typeof window !== 'undefined' && window.innerWidth < 1024 ? -260 : 0,
-          width: isCollapsed ? 68 : 260,
+          width: typeof window !== 'undefined' && window.innerWidth < 1024 ? 260 : sidebarWidth,
         }}
         transition={{ type: 'spring', stiffness: 300, damping: 30 }}
       >
@@ -172,16 +191,16 @@ export function Sidebar() {
 
         {/* Navigation */}
         <nav className="flex-1 overflow-y-auto px-3 py-4 space-y-6">
-          <NavSection title="Menu" items={mainNavItems} collapsed={isCollapsed} />
-          <NavSection title="PDF Tools" items={toolsNavItems} collapsed={isCollapsed} />
-          <NavSection title="Lainnya" items={settingsNavItems} collapsed={isCollapsed} />
+          <NavSection title={t.nav.menu} items={mainNavItems} collapsed={isCollapsed} />
+          <NavSection title={t.nav.tools} items={toolsNavItems} collapsed={isCollapsed} />
+          <NavSection title={t.nav.other} items={settingsNavItems} collapsed={isCollapsed} />
         </nav>
 
         {!isCollapsed && (
           <div className="border-t border-sidebar-border p-4">
             <div className="rounded-xl bg-gradient-to-r from-primary/10 to-accent/10 p-3">
-              <p className="text-xs font-semibold text-foreground">Semua fitur gratis</p>
-              <p className="mt-1 text-[11px] text-muted-foreground">Semua tools aktif untuk akun ini.</p>
+              <p className="text-xs font-semibold text-foreground">{t.nav.freeTitle}</p>
+              <p className="mt-1 text-[11px] text-muted-foreground">{t.nav.freeDescription}</p>
             </div>
           </div>
         )}

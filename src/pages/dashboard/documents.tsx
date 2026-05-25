@@ -34,6 +34,7 @@ import { cn, formatFileSize } from '@/lib/utils';
 import type { Folder } from '@/types';
 import { buildApiUrl } from '@/services/api';
 import { debugAction } from '@/lib/debug';
+import { useTranslation } from '@/lib/i18n';
 
 
 
@@ -94,6 +95,7 @@ const serializeDebugError = (error: unknown) => {
 export default function DocumentsPage() {
   const navigate = useNavigate();
   const { user } = useAuthStore();
+  const { language, t } = useTranslation();
   const [docs, setDocs] = useState<PDFDocument[]>([]);
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [searchQuery, setSearchQuery] = useState('');
@@ -262,7 +264,7 @@ export default function DocumentsPage() {
         statusText: response.statusText,
         payload,
       });
-      throw new Error('Gagal memasukkan dokumen ke antrean AI.');
+      throw new Error(language === 'id' ? 'Gagal memasukkan dokumen ke antrean AI.' : 'Failed to add document to AI queue.');
     }
 
     const payload = await response.json().catch(() => null);
@@ -278,7 +280,7 @@ export default function DocumentsPage() {
 
     const { data: authData, error: authError } = await supabase.auth.getUser();
     if (authError || !authData.user) {
-      toast.error('Sesi login tidak valid. Silakan login ulang.');
+      toast.error(language === 'id' ? 'Sesi login tidak valid. Silakan login ulang.' : 'Invalid login session. Please sign in again.');
       return;
     }
 
@@ -371,7 +373,7 @@ export default function DocumentsPage() {
         });
         const failedQueueCount = queueResults.filter((result) => result.status === 'rejected').length;
         if (failedQueueCount > 0) {
-          toast.warning(`${failedQueueCount} dokumen tersimpan, tetapi belum masuk antrean AI.`);
+          toast.warning(language === 'id' ? `${failedQueueCount} dokumen tersimpan, tetapi belum masuk antrean AI.` : `${failedQueueCount} documents were saved, but not added to the AI queue yet.`);
         }
       }
       
@@ -387,7 +389,7 @@ export default function DocumentsPage() {
         name: err?.name,
         statusCode: err?.statusCode,
       });
-      toast.error('Gagal mengunggah dokumen: ' + err.message);
+      toast.error((language === 'id' ? 'Gagal mengunggah dokumen: ' : 'Failed to upload document: ') + err.message);
     } finally {
       setIsUploading(false);
     }
@@ -417,10 +419,10 @@ export default function DocumentsPage() {
       setShowNewFolderModal(false);
       setNewFolderName('');
       logDocumentsDebug('create folder success', { folderId: data.id, name: data.name });
-      toast.success('Folder berhasil dibuat.');
+      toast.success(language === 'id' ? 'Folder berhasil dibuat.' : 'Folder created.');
     } catch (err: any) {
       logDocumentsDebug('create folder failed', { error: serializeDebugError(err) });
-      toast.error('Gagal membuat folder: ' + err.message);
+      toast.error((language === 'id' ? 'Gagal membuat folder: ' : 'Failed to create folder: ') + err.message);
     } finally {
       setIsCreatingFolder(false);
     }
@@ -446,13 +448,13 @@ export default function DocumentsPage() {
       
       setDocs(prev => prev.map(d => d.id === docToRename.id ? { ...d, name: newDocName.trim() } : d));
       logDocumentsDebug('rename document success', { docId: docToRename.id });
-      toast.success('Nama dokumen berhasil diubah.');
+      toast.success(language === 'id' ? 'Nama dokumen berhasil diubah.' : 'Document name updated.');
     } catch (err: any) {
       logDocumentsDebug('rename document failed', {
         docId: docToRename.id,
         error: serializeDebugError(err),
       });
-      toast.error('Gagal mengubah nama dokumen: ' + err.message);
+      toast.error((language === 'id' ? 'Gagal mengubah nama dokumen: ' : 'Failed to rename document: ') + err.message);
     } finally {
       setDocToRename(null);
       setNewDocName('');
@@ -482,13 +484,13 @@ export default function DocumentsPage() {
         setCurrentFolder({ ...currentFolder, name: newFolderNameEdit.trim() });
       }
       logDocumentsDebug('rename folder success', { folderId: folderToRename.id });
-      toast.success('Nama folder berhasil diubah.');
+      toast.success(language === 'id' ? 'Nama folder berhasil diubah.' : 'Folder name updated.');
     } catch (err: any) {
       logDocumentsDebug('rename folder failed', {
         folderId: folderToRename.id,
         error: serializeDebugError(err),
       });
-      toast.error('Gagal mengubah nama folder: ' + err.message);
+      toast.error((language === 'id' ? 'Gagal mengubah nama folder: ' : 'Failed to rename folder: ') + err.message);
     } finally {
       setFolderToRename(null);
       setNewFolderNameEdit('');
@@ -510,13 +512,13 @@ export default function DocumentsPage() {
         setCurrentFolder(null);
       }
       logDocumentsDebug('delete folder success', { folderId: folderToDelete.id });
-      toast.success('Folder berhasil dihapus.');
+      toast.success(language === 'id' ? 'Folder berhasil dihapus.' : 'Folder deleted.');
     } catch (err: any) {
       logDocumentsDebug('delete folder failed', {
         folderId: folderToDelete.id,
         error: serializeDebugError(err),
       });
-      toast.error('Gagal menghapus folder: ' + err.message);
+      toast.error((language === 'id' ? 'Gagal menghapus folder: ' : 'Failed to delete folder: ') + err.message);
     } finally {
       setFolderToDelete(null);
     }
@@ -565,7 +567,7 @@ export default function DocumentsPage() {
       candidates,
     });
     console.error('PUBLIC URL ERROR:', { fileUrl, candidates });
-    toast.error('Gagal mengambil file.');
+    toast.error(language === 'id' ? 'Gagal mengambil file.' : 'Failed to get file.');
     return null;
   };
 
@@ -601,7 +603,7 @@ export default function DocumentsPage() {
         reason: 'No storage path candidate found.',
         candidates,
       });
-      toast.error('Gagal mendownload dokumen: path file tidak valid.');
+      toast.error(language === 'id' ? 'Gagal mendownload dokumen: path file tidak valid.' : 'Failed to download document: invalid file path.');
       return;
     }
 
@@ -658,7 +660,7 @@ export default function DocumentsPage() {
         error: serializedError,
         elapsedMs: Math.round(performance.now() - startedAt),
       });
-      toast.error(`Gagal mendownload dokumen: ${serializedError.message}`);
+      toast.error(`${language === 'id' ? 'Gagal mendownload dokumen' : 'Failed to download document'}: ${serializedError.message}`);
     }
   };
   
@@ -684,13 +686,13 @@ export default function DocumentsPage() {
       
       setDocs(prev => prev.filter(d => d.id !== docToDelete.id));
       logDocumentsDebug('delete document success', { docId: docToDelete.id });
-      toast.success('Dokumen berhasil dihapus.');
+      toast.success(language === 'id' ? 'Dokumen berhasil dihapus.' : 'Document deleted.');
     } catch (err: any) {
       logDocumentsDebug('delete document failed', {
         docId: docToDelete.id,
         error: serializeDebugError(err),
       });
-      toast.error('Gagal menghapus dokumen: ' + err.message);
+      toast.error((language === 'id' ? 'Gagal menghapus dokumen: ' : 'Failed to delete document: ') + err.message);
     } finally {
       setDocToDelete(null);
     }
@@ -713,21 +715,21 @@ export default function DocumentsPage() {
               </Button>
             )}
             <h1 className="text-2xl font-bold">
-              {currentFolder ? currentFolder.name : 'Dokumen Saya'}
+              {currentFolder ? currentFolder.name : t.documentsPage.title}
             </h1>
           </div>
           <p className="text-muted-foreground text-sm mt-1">
-            {currentDocs.length} dokumen · {formatFileSize(currentDocs.reduce((acc, d) => acc + d.file_size, 0))} total
+            {currentDocs.length} {t.common.documents} · {formatFileSize(currentDocs.reduce((acc, d) => acc + d.file_size, 0))} {t.documentsPage.total}
           </p>
         </div>
         <div className="flex items-center gap-2 w-full sm:w-auto">
           {!currentFolder && (
             <Button variant="outline" className="flex-1 sm:flex-none gap-2" onClick={() => setShowNewFolderModal(true)}>
-              <FolderIcon className="h-4 w-4" /> Folder
+              <FolderIcon className="h-4 w-4" /> {t.documentsPage.folderButton}
             </Button>
           )}
           <Button variant="gradient" className="flex-1 sm:flex-none gap-2" onClick={() => setShowUpload(!showUpload)}>
-            <Plus className="h-4 w-4" /> Upload PDF
+            <Plus className="h-4 w-4" /> {t.common.uploadPdf}
           </Button>
         </div>
       </div>
@@ -754,7 +756,7 @@ export default function DocumentsPage() {
                     onClick={handleProcessUpload}
                     disabled={isUploading}
                   >
-                    {isUploading ? 'Mengunggah...' : `Unggah ${uploadedFiles.length} Dokumen`}
+                    {isUploading ? t.documentsPage.uploading : `${t.documentsPage.uploadCount} ${uploadedFiles.length} ${t.dashboard.documents}`}
                   </Button>
                 </div>
               )}
@@ -768,7 +770,7 @@ export default function DocumentsPage() {
         <div className="relative flex-1 max-w-sm">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input
-            placeholder="Cari dokumen..."
+            placeholder={t.documentsPage.searchPlaceholder}
             className="pl-9"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
@@ -840,7 +842,7 @@ export default function DocumentsPage() {
                   <div className="space-y-1">
                     <p className="text-sm font-medium truncate">{folder.name}</p>
                     <div className="flex items-center justify-between text-xs text-muted-foreground">
-                      <span>{docs.filter(d => d.folder_id === folder.id).length} dokumen</span>
+                      <span>{docs.filter(d => d.folder_id === folder.id).length} {t.common.documents}</span>
                       <div className="flex items-center gap-1">
                         <Clock className="h-3 w-3" />
                         {new Date(folder.created_at).toLocaleDateString('id-ID')}
@@ -851,7 +853,7 @@ export default function DocumentsPage() {
                   {/* Action Buttons to match height of PDF action row */}
                   <div className="flex gap-1.5 pt-1 opacity-0 group-hover:opacity-100 transition-opacity">
                     <Button variant="ghost" size="sm" className="w-full text-xs h-7">
-                      Buka Folder
+                      {t.documentsPage.openFolder}
                     </Button>
                   </div>
                 </CardContent>
@@ -866,7 +868,7 @@ export default function DocumentsPage() {
                 </div>
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-medium truncate">{folder.name}</p>
-                  <p className="text-xs text-muted-foreground">{docs.filter(d => d.folder_id === folder.id).length} dokumen</p>
+                  <p className="text-xs text-muted-foreground">{docs.filter(d => d.folder_id === folder.id).length} {t.common.documents}</p>
                 </div>
                 <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                   <Button variant="ghost" size="icon-sm" onClick={(e) => { e.stopPropagation(); setFolderToRename(folder); setNewFolderNameEdit(folder.name); }}>
@@ -898,7 +900,7 @@ export default function DocumentsPage() {
                   </div>
                   {doc.status === 'processing' && (
                     <div className="absolute bottom-2 left-2">
-                      <Badge variant="warning" className="text-[9px]">Memproses...</Badge>
+                      <Badge variant="warning" className="text-[9px]">{t.common.processing}</Badge>
                     </div>
                   )}
                 </div>
@@ -916,7 +918,7 @@ export default function DocumentsPage() {
                       <MessageSquare className="h-3 w-3 mr-1" /> Chat
                     </Button>
                     <Button variant="ghost" size="sm" className="flex-1 text-xs h-7" onClick={(e) => { e.stopPropagation(); handleView(doc); }}>
-                      <Eye className="h-3 w-3 mr-1" /> View
+                      <Eye className="h-3 w-3 mr-1" /> {t.common.view}
                     </Button>
                     <Button variant="ghost" size="icon-sm" className="h-7 w-7" onClick={(e) => { e.stopPropagation(); handleDownload(doc); }}>
                       <Download className="h-3 w-3" />
@@ -937,14 +939,14 @@ export default function DocumentsPage() {
                 </div>
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-medium truncate">{doc.name}</p>
-                  <p className="text-xs text-muted-foreground">{doc.page_count} halaman · {formatFileSize(doc.file_size)}</p>
+                  <p className="text-xs text-muted-foreground">{doc.page_count} {t.common.pages} · {formatFileSize(doc.file_size)}</p>
                 </div>
                 <div className="hidden sm:flex items-center gap-1.5 text-xs text-muted-foreground">
                   <Clock className="h-3 w-3" />
                   {new Date(doc.created_at).toLocaleDateString('id-ID')}
                 </div>
                 {doc.status === 'processing' && (
-                  <Badge variant="warning" className="text-[9px]">Memproses...</Badge>
+                  <Badge variant="warning" className="text-[9px]">{t.common.processing}</Badge>
                 )}
                 <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                   <Button variant="ghost" size="icon-sm" onClick={(e) => { e.stopPropagation(); handleChat(doc.id); }}><MessageSquare className="h-3.5 w-3.5" /></Button>
@@ -983,9 +985,9 @@ export default function DocumentsPage() {
                 <CheckCircle2 className="w-12 h-12 text-green-500" />
               </motion.div>
               <div className="space-y-1">
-                <h3 className="text-xl font-bold text-foreground">Berhasil Diunggah!</h3>
+                <h3 className="text-xl font-bold text-foreground">{t.documentsPage.uploadSuccessTitle}</h3>
                 <p className="text-sm text-muted-foreground">
-                  Dokumen PDF Anda telah berhasil diunggah dan sedang diproses.
+                  {t.documentsPage.uploadSuccessDescription}
                 </p>
               </div>
               <Button 
@@ -993,7 +995,7 @@ export default function DocumentsPage() {
                 variant="gradient" 
                 onClick={() => setShowSuccessPopup(false)}
               >
-                Tutup
+                {t.common.close}
               </Button>
             </motion.div>
           </motion.div>
@@ -1020,9 +1022,9 @@ export default function DocumentsPage() {
                 <AlertTriangle className="w-10 h-10" />
               </div>
               <div className="space-y-2">
-                <h3 className="text-xl font-bold text-foreground">Hapus Dokumen?</h3>
+                <h3 className="text-xl font-bold text-foreground">{t.documentsPage.deleteDocumentTitle}</h3>
                 <p className="text-sm text-muted-foreground leading-relaxed">
-                  Apakah Anda yakin ingin menghapus <strong>{docToDelete.name}</strong>? Tindakan ini tidak dapat dibatalkan.
+                  {t.documentsPage.deleteDocumentDescription} <strong>{docToDelete.name}</strong>? {t.documentsPage.deleteCannotUndo}
                 </p>
               </div>
               <div className="flex gap-3 pt-2">
@@ -1031,14 +1033,14 @@ export default function DocumentsPage() {
                   variant="outline" 
                   onClick={() => setDocToDelete(null)}
                 >
-                  Batal
+                  {t.common.cancel}
                 </Button>
                 <Button 
                   className="flex-1" 
                   variant="destructive" 
                   onClick={confirmDelete}
                 >
-                  Ya, Hapus
+                  {t.common.yesDelete}
                 </Button>
               </div>
             </motion.div>
@@ -1067,13 +1069,13 @@ export default function DocumentsPage() {
                     <FolderIcon className="h-6 w-6" />
                   </div>
                   <div>
-                    <h3 className="text-xl font-bold">Buat Folder Baru</h3>
-                    <p className="text-sm text-muted-foreground">Kelompokkan dokumen Anda agar lebih rapi.</p>
+                    <h3 className="text-xl font-bold">{t.documentsPage.newFolderTitle}</h3>
+                    <p className="text-sm text-muted-foreground">{t.documentsPage.newFolderDescription}</p>
                   </div>
                   <div className="space-y-2 pt-2">
                     <Input
                       autoFocus
-                      placeholder="Contoh: Laporan Keuangan"
+                      placeholder={t.documentsPage.folderPlaceholder}
                       value={newFolderName}
                       onChange={(e) => setNewFolderName(e.target.value)}
                       disabled={isCreatingFolder}
@@ -1090,10 +1092,10 @@ export default function DocumentsPage() {
                     }}
                     disabled={isCreatingFolder}
                   >
-                    Batal
+                    {t.common.cancel}
                   </Button>
                   <Button type="submit" variant="gradient" disabled={!newFolderName.trim() || isCreatingFolder}>
-                    {isCreatingFolder ? 'Membuat...' : 'Buat Folder'}
+                    {isCreatingFolder ? t.documentsPage.creating : t.documentsPage.createFolder}
                   </Button>
                 </div>
               </form>
@@ -1120,20 +1122,20 @@ export default function DocumentsPage() {
               <form onSubmit={confirmRenameDoc}>
                 <div className="p-6 space-y-4">
                   <div>
-                    <h3 className="text-xl font-bold">Ganti Nama Dokumen</h3>
+                    <h3 className="text-xl font-bold">{t.documentsPage.renameDocument}</h3>
                   </div>
                   <div className="space-y-2 pt-2">
                     <Input
                       autoFocus
-                      placeholder="Nama Dokumen"
+                      placeholder={t.documentsPage.documentName}
                       value={newDocName}
                       onChange={(e) => setNewDocName(e.target.value)}
                     />
                   </div>
                 </div>
                 <div className="bg-surface-2 p-4 flex justify-end gap-3 border-t border-border">
-                  <Button type="button" variant="outline" onClick={() => setDocToRename(null)}>Batal</Button>
-                  <Button type="submit" variant="gradient" disabled={!newDocName.trim()}>Simpan</Button>
+                  <Button type="button" variant="outline" onClick={() => setDocToRename(null)}>{t.common.cancel}</Button>
+                  <Button type="submit" variant="gradient" disabled={!newDocName.trim()}>{t.common.save}</Button>
                 </div>
               </form>
             </motion.div>
@@ -1159,20 +1161,20 @@ export default function DocumentsPage() {
               <form onSubmit={confirmRenameFolder}>
                 <div className="p-6 space-y-4">
                   <div>
-                    <h3 className="text-xl font-bold">Ganti Nama Folder</h3>
+                    <h3 className="text-xl font-bold">{t.documentsPage.renameFolder}</h3>
                   </div>
                   <div className="space-y-2 pt-2">
                     <Input
                       autoFocus
-                      placeholder="Nama Folder"
+                      placeholder={t.documentsPage.folderName}
                       value={newFolderNameEdit}
                       onChange={(e) => setNewFolderNameEdit(e.target.value)}
                     />
                   </div>
                 </div>
                 <div className="bg-surface-2 p-4 flex justify-end gap-3 border-t border-border">
-                  <Button type="button" variant="outline" onClick={() => setFolderToRename(null)}>Batal</Button>
-                  <Button type="submit" variant="gradient" disabled={!newFolderNameEdit.trim()}>Simpan</Button>
+                  <Button type="button" variant="outline" onClick={() => setFolderToRename(null)}>{t.common.cancel}</Button>
+                  <Button type="submit" variant="gradient" disabled={!newFolderNameEdit.trim()}>{t.common.save}</Button>
                 </div>
               </form>
             </motion.div>
@@ -1199,14 +1201,14 @@ export default function DocumentsPage() {
                 <AlertTriangle className="w-10 h-10" />
               </div>
               <div className="space-y-2">
-                <h3 className="text-xl font-bold text-foreground">Hapus Folder?</h3>
+                <h3 className="text-xl font-bold text-foreground">{t.documentsPage.deleteFolderTitle}</h3>
                 <p className="text-sm text-muted-foreground leading-relaxed">
-                  Apakah Anda yakin ingin menghapus folder <strong>{folderToDelete.name}</strong>? Dokumen di dalamnya akan ikut terhapus.
+                  {t.documentsPage.deleteFolderDescription} <strong>{folderToDelete.name}</strong>? {t.documentsPage.folderContentsDeleted}
                 </p>
               </div>
               <div className="flex gap-3 pt-2">
-                <Button className="flex-1" variant="outline" onClick={() => setFolderToDelete(null)}>Batal</Button>
-                <Button className="flex-1" variant="destructive" onClick={confirmDeleteFolder}>Ya, Hapus</Button>
+                <Button className="flex-1" variant="outline" onClick={() => setFolderToDelete(null)}>{t.common.cancel}</Button>
+                <Button className="flex-1" variant="destructive" onClick={confirmDeleteFolder}>{t.common.yesDelete}</Button>
               </div>
             </motion.div>
           </motion.div>

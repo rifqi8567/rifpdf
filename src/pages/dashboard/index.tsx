@@ -21,6 +21,8 @@ import { supabase } from '@/lib/supabase';
 import { useAuthStore } from '@/store/auth-store';
 import type { PDFDocument } from '@/types';
 import { debugAction, debugError } from '@/lib/debug';
+import { useTranslation } from '@/lib/i18n';
+import type { Language } from '@/store/language-store';
 
 const fadeUp = {
   initial: { opacity: 0, y: 20 },
@@ -32,18 +34,22 @@ const stagger = {
 };
 
 const quickActions = [
-  { label: 'Upload PDF', icon: Upload, href: '/dashboard/documents', color: 'from-blue-500 to-blue-600' },
-  { label: 'AI Chat', icon: MessageSquare, href: '/dashboard/chat', color: 'from-purple-500 to-purple-600' },
-  { label: 'Merge PDF', icon: FileText, href: '/dashboard/tools/merge', color: 'from-orange-500 to-orange-600' },
-  { label: 'PDF to JPG', icon: FileImage, href: '/dashboard/tools/pdf-to-jpg', color: 'from-amber-500 to-amber-600' },
-  { label: 'OCR AI', icon: ScanLine, href: '/dashboard/tools/ocr', color: 'from-green-500 to-green-600' },
+  { labelKey: 'uploadPdf', icon: Upload, href: '/dashboard/documents', color: 'from-blue-500 to-blue-600' },
+  { labelKey: 'aiChat', icon: MessageSquare, href: '/dashboard/chat', color: 'from-purple-500 to-purple-600' },
+  { labelKey: 'merge', icon: FileText, href: '/dashboard/tools/merge', color: 'from-orange-500 to-orange-600' },
+  { labelKey: 'pdfToJpg', icon: FileImage, href: '/dashboard/tools/pdf-to-jpg', color: 'from-amber-500 to-amber-600' },
+  { labelKey: 'ocr', icon: ScanLine, href: '/dashboard/tools/ocr', color: 'from-green-500 to-green-600' },
 ];
 
 const aiModels = [
   { name: 'OpenRouter Free', icon: 'Free', speed: 'Auto' },
 ];
 
-const formatRelativeTime = (dateValue: string) => {
+const formatRelativeTime = (
+  dateValue: string,
+  language: Language,
+  labels: ReturnType<typeof useTranslation>['t']['dashboard']
+) => {
   const timestamp = new Date(dateValue).getTime();
   if (!Number.isFinite(timestamp)) return '-';
 
@@ -52,17 +58,18 @@ const formatRelativeTime = (dateValue: string) => {
   const hour = 60 * minute;
   const day = 24 * hour;
 
-  if (diffMs < minute) return 'Baru saja';
-  if (diffMs < hour) return `${Math.floor(diffMs / minute)} menit lalu`;
-  if (diffMs < day) return `${Math.floor(diffMs / hour)} jam lalu`;
-  if (diffMs < 2 * day) return 'Kemarin';
-  if (diffMs < 7 * day) return `${Math.floor(diffMs / day)} hari lalu`;
+  if (diffMs < minute) return labels.justNow;
+  if (diffMs < hour) return `${Math.floor(diffMs / minute)} ${labels.minutesAgo}`;
+  if (diffMs < day) return `${Math.floor(diffMs / hour)} ${labels.hoursAgo}`;
+  if (diffMs < 2 * day) return labels.yesterday;
+  if (diffMs < 7 * day) return `${Math.floor(diffMs / day)} ${labels.daysAgo}`;
 
-  return new Date(dateValue).toLocaleDateString('id-ID');
+  return new Date(dateValue).toLocaleDateString(language === 'id' ? 'id-ID' : 'en-US');
 };
 
 export default function DashboardPage() {
   const { user } = useAuthStore();
+  const { language, t } = useTranslation();
   const [docs, setDocs] = useState<PDFDocument[]>([]);
   const [isLoadingDocs, setIsLoadingDocs] = useState(true);
 
@@ -116,38 +123,45 @@ export default function DashboardPage() {
   const recentDocs = docs.slice(0, 4);
   const stats = [
     {
-      label: 'Dokumen',
-      value: docs.length.toLocaleString('id-ID'),
-      change: processingDocs.length > 0 ? `${processingDocs.length} diproses` : `${readyDocs.length} siap`,
+      label: t.dashboard.documents,
+      value: docs.length.toLocaleString(language === 'id' ? 'id-ID' : 'en-US'),
+      change: processingDocs.length > 0 ? `${processingDocs.length} ${t.dashboard.processed}` : `${readyDocs.length} ${t.dashboard.ready}`,
       icon: FileText,
       color: 'text-blue-400',
       bg: 'bg-blue-400/10',
     },
     {
-      label: 'Chat AI',
-      value: readyDocs.length.toLocaleString('id-ID'),
-      change: 'dokumen siap chat',
+      label: t.dashboard.aiChat,
+      value: readyDocs.length.toLocaleString(language === 'id' ? 'id-ID' : 'en-US'),
+      change: t.dashboard.readyForChat,
       icon: MessageSquare,
       color: 'text-purple-400',
       bg: 'bg-purple-400/10',
     },
     {
-      label: 'Penyimpanan',
+      label: t.dashboard.storage,
       value: formatFileSize(totalSize),
-      change: 'bebas dipakai',
+      change: t.dashboard.freeToUse,
       icon: TrendingUp,
       color: 'text-yellow-400',
       bg: 'bg-yellow-400/10',
     },
     {
-      label: 'Halaman Diproses',
-      value: totalPages.toLocaleString('id-ID'),
-      change: 'gratis',
+      label: t.dashboard.processedPages,
+      value: totalPages.toLocaleString(language === 'id' ? 'id-ID' : 'en-US'),
+      change: t.dashboard.free,
       icon: TrendingUp,
       color: 'text-green-400',
       bg: 'bg-green-400/10',
     },
   ];
+  const getQuickActionLabel = (labelKey: typeof quickActions[number]['labelKey']) => {
+    if (labelKey === 'uploadPdf') return t.common.uploadPdf;
+    if (labelKey === 'aiChat') return t.dashboard.aiChat;
+    if (labelKey === 'merge') return t.nav.merge;
+    if (labelKey === 'pdfToJpg') return t.nav.pdfToJpg;
+    return t.nav.ocr;
+  };
 
   return (
     <div className="p-4 lg:p-6 space-y-6 max-w-7xl mx-auto">
@@ -157,15 +171,15 @@ export default function DashboardPage() {
         className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between"
       >
         <div>
-          <h1 className="text-2xl font-bold">Selamat datang!</h1>
+          <h1 className="text-2xl font-bold">{t.dashboard.welcome}</h1>
           <p className="text-muted-foreground text-sm mt-1">
-            Kelola dokumen PDF Anda dengan kecerdasan AI
+            {t.dashboard.subtitle}
           </p>
         </div>
         <Link to="/dashboard/documents">
           <Button variant="gradient" className="group">
             <Upload className="h-4 w-4" />
-            Upload PDF
+            {t.common.uploadPdf}
             <ArrowUpRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5 group-hover:-translate-y-0.5" />
           </Button>
         </Link>
@@ -182,16 +196,16 @@ export default function DashboardPage() {
               <ScanLine className="h-5 w-5 text-primary" />
             </div>
             <div>
-              <h2 className="text-base font-semibold">OCR AI Scanner aktif</h2>
+              <h2 className="text-base font-semibold">{t.dashboard.ocrTitle}</h2>
               <p className="mt-1 text-sm leading-6 text-muted-foreground">
-                Scan PDF atau gambar, lalu AI otomatis membuat jawaban, simpulan, penjelasan rapi, dan tindak lanjut.
+                {t.dashboard.ocrDescription}
               </p>
             </div>
           </div>
           <Link to="/dashboard/tools/ocr" className="shrink-0">
             <Button variant="gradient">
               <ScanLine className="h-4 w-4" />
-              Buka OCR AI
+              {t.dashboard.openOcr}
             </Button>
           </Link>
         </div>
@@ -217,10 +231,10 @@ export default function DashboardPage() {
       </motion.div>
 
       <motion.div initial="initial" animate="animate" variants={stagger}>
-        <h2 className="text-lg font-semibold mb-3">Aksi Cepat</h2>
+        <h2 className="text-lg font-semibold mb-3">{t.dashboard.quickActions}</h2>
         <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
           {quickActions.map((action) => (
-            <motion.div key={action.label} variants={fadeUp}>
+            <motion.div key={action.labelKey} variants={fadeUp}>
               <Link to={action.href}>
                 <motion.div
                   whileHover={{ scale: 1.03, y: -3 }}
@@ -230,7 +244,9 @@ export default function DashboardPage() {
                   <div className={cn('flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br', action.color)}>
                     <action.icon className="h-6 w-6 text-white" />
                   </div>
-                  <span className="text-sm font-medium">{action.label}</span>
+                  <span className="text-sm font-medium">
+                    {getQuickActionLabel(action.labelKey)}
+                  </span>
                 </motion.div>
               </Link>
             </motion.div>
@@ -240,10 +256,10 @@ export default function DashboardPage() {
 
       <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }}>
         <div className="flex items-center justify-between mb-3">
-          <h2 className="text-lg font-semibold">Dokumen Terbaru</h2>
+          <h2 className="text-lg font-semibold">{t.dashboard.recentDocuments}</h2>
           <Link to="/dashboard/documents">
             <Button variant="ghost" size="sm" className="text-muted-foreground">
-              Lihat semua
+              {t.dashboard.seeAll}
               <ArrowUpRight className="h-3 w-3 ml-1" />
             </Button>
           </Link>
@@ -255,18 +271,18 @@ export default function DashboardPage() {
               {isLoadingDocs && (
                 <div className="flex items-center justify-center gap-2 p-8 text-sm text-muted-foreground">
                   <Loader2 className="h-4 w-4 animate-spin" />
-                  Memuat dokumen...
+                  {t.dashboard.loadingDocuments}
                 </div>
               )}
 
               {!isLoadingDocs && recentDocs.length === 0 && (
                 <div className="p-8 text-center">
-                  <p className="text-sm font-medium">Belum ada dokumen</p>
-                  <p className="mt-1 text-xs text-muted-foreground">Upload PDF pertama untuk mulai memakai AI Chat dan analisis dokumen.</p>
+                  <p className="text-sm font-medium">{t.dashboard.noDocuments}</p>
+                  <p className="mt-1 text-xs text-muted-foreground">{t.dashboard.noDocumentsDescription}</p>
                   <Link to="/dashboard/documents" className="mt-4 inline-flex">
                     <Button variant="outline" size="sm">
                       <Upload className="h-4 w-4" />
-                      Upload PDF
+                      {t.common.uploadPdf}
                     </Button>
                   </Link>
                 </div>
@@ -285,14 +301,14 @@ export default function DashboardPage() {
                   </div>
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-medium truncate">{doc.name}</p>
-                    <p className="text-xs text-muted-foreground">{doc.page_count} halaman · {formatFileSize(doc.file_size)}</p>
+                    <p className="text-xs text-muted-foreground">{doc.page_count} {t.common.pages} · {formatFileSize(doc.file_size)}</p>
                   </div>
                   <Badge variant={doc.status === 'ready' ? 'success' : doc.status === 'error' ? 'destructive' : 'warning'} className="hidden sm:inline-flex text-[10px]">
-                    {doc.status === 'ready' ? 'Siap' : doc.status === 'error' ? 'Error' : 'Proses'}
+                    {doc.status === 'ready' ? t.dashboard.statusReady : doc.status === 'error' ? 'Error' : t.dashboard.statusProcess}
                   </Badge>
                   <div className="hidden sm:flex items-center gap-1.5 text-xs text-muted-foreground">
                     <Clock className="h-3 w-3" />
-                    {formatRelativeTime(doc.created_at)}
+                    {formatRelativeTime(doc.created_at, language, t.dashboard)}
                   </div>
                 </motion.div>
               ))}

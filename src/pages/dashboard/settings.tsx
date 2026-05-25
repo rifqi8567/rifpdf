@@ -22,6 +22,8 @@ import { supabase } from '@/lib/supabase';
 import { toast } from 'sonner';
 import { getUserProfile, updateUserProfile } from '@/services/profile';
 import { debugAction, debugError } from '@/lib/debug';
+import { useTranslation } from '@/lib/i18n';
+import type { Language } from '@/store/language-store';
 
 const fadeUp = {
   initial: { opacity: 0, y: 20 },
@@ -31,19 +33,23 @@ const fadeUp = {
 export default function SettingsPage() {
   const { theme, setTheme } = useThemeStore();
   const { user, setUser } = useAuthStore();
+  const { language, setLanguage, t } = useTranslation();
   
   const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
   const [avatarUrl, setAvatarUrl] = useState('');
   const [isSaving, setIsSaving] = useState(false);
   
-  // States for Security and Language
+  // States for Security
   const [newPassword, setNewPassword] = useState('');
   const [isUpdatingPassword, setIsUpdatingPassword] = useState(false);
-  const [language, setLanguage] = useState<'id' | 'en'>('id');
   
   const [showSuccessPopup, setShowSuccessPopup] = useState(false);
-  const [successMessage, setSuccessMessage] = useState('Informasi profil Anda telah berhasil diperbarui.');
+  const [successMessage, setSuccessMessage] = useState<string>(t.settings.profileSuccess);
+
+  useEffect(() => {
+    setSuccessMessage(t.settings.profileSuccess);
+  }, [t.settings.profileSuccess]);
 
   useEffect(() => {
     // Ambil data user dari Supabase saat komponen di-mount
@@ -132,7 +138,7 @@ export default function SettingsPage() {
     });
     try {
       const currentUserId = user?.id || (await supabase.auth.getUser()).data.user?.id;
-      if (!currentUserId) throw new Error('Sesi login tidak ditemukan.');
+      if (!currentUserId) throw new Error(t.settings.sessionMissing);
 
       await updateUserProfile(currentUserId, fullName, avatarUrl);
       debugAction('settings', 'profile save success', {
@@ -145,13 +151,13 @@ export default function SettingsPage() {
       }
       
       // Tampilkan popup animasi sukses
-      setSuccessMessage('Informasi profil Anda telah berhasil diperbarui.');
+      setSuccessMessage(t.settings.profileSuccess);
       setShowSuccessPopup(true);
       setTimeout(() => setShowSuccessPopup(false), 3000);
       
     } catch (err: any) {
       debugError('settings', 'profile save failed', err, { userId: user?.id });
-      toast.error(err.message || 'Gagal menyimpan profil.');
+      toast.error(err.message || t.settings.saveFailed);
     } finally {
       setIsSaving(false);
     }
@@ -159,7 +165,7 @@ export default function SettingsPage() {
 
   const handleUpdatePassword = async () => {
     if (!newPassword || newPassword.length < 6) {
-      toast.error('Password baru minimal 6 karakter.');
+      toast.error(t.settings.passwordTooShort);
       debugAction('settings', 'password update blocked', { reason: 'too_short' }, 'warn');
       return;
     }
@@ -175,23 +181,23 @@ export default function SettingsPage() {
       debugAction('settings', 'password update success', { userId: user?.id });
       
       setNewPassword('');
-      setSuccessMessage('Password Anda berhasil diperbarui!');
+      setSuccessMessage(t.settings.passwordSuccess);
       setShowSuccessPopup(true);
       setTimeout(() => setShowSuccessPopup(false), 3000);
       
     } catch (err: any) {
       debugError('settings', 'password update failed', err, { userId: user?.id });
-      toast.error(err.message || 'Gagal mengubah password.');
+      toast.error(err.message || t.settings.passwordFailed);
     } finally {
       setIsUpdatingPassword(false);
     }
   };
 
   return (
-    <div className="p-4 lg:p-6 space-y-6 max-w-5xl mx-auto w-full">
+    <div className="p-3 sm:p-4 lg:p-6 space-y-5 sm:space-y-6 max-w-5xl mx-auto w-full">
       <motion.div {...fadeUp}>
-        <h1 className="text-2xl font-bold">Pengaturan</h1>
-        <p className="text-muted-foreground text-sm mt-1">Kelola akun dan preferensi Anda</p>
+        <h1 className="text-2xl font-bold">{t.settings.title}</h1>
+        <p className="text-muted-foreground text-sm mt-1">{t.settings.subtitle}</p>
       </motion.div>
 
       {/* Profile */}
@@ -199,12 +205,12 @@ export default function SettingsPage() {
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-base">
-              <User className="h-4 w-4 text-primary" /> Profil
+              <User className="h-4 w-4 text-primary" /> {t.settings.profile}
             </CardTitle>
-            <CardDescription>Informasi akun Anda</CardDescription>
+            <CardDescription>{t.settings.profileDescription}</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div className="flex items-center gap-4">
+            <div className="flex flex-col items-start gap-4 sm:flex-row sm:items-center">
               <div className="relative h-16 w-16 rounded-full gradient-bg flex items-center justify-center text-white text-xl font-bold uppercase overflow-hidden shadow-inner">
                 {avatarUrl ? (
                   <img src={avatarUrl} alt="Avatar" className="w-full h-full object-cover" />
@@ -222,18 +228,18 @@ export default function SettingsPage() {
                 />
                 <label htmlFor="avatar-upload">
                   <Button variant="outline" size="sm" asChild className="cursor-pointer">
-                    <span>Ganti Foto</span>
+                    <span>{t.settings.changePhoto}</span>
                   </Button>
                 </label>
               </div>
             </div>
             <div className="grid gap-4 sm:grid-cols-2">
               <div className="space-y-2">
-                <label className="text-sm font-medium">Nama Lengkap</label>
+                <label className="text-sm font-medium">{t.settings.fullName}</label>
                 <Input 
                   value={fullName}
                   onChange={(e) => setFullName(e.target.value)}
-                  placeholder="Masukkan nama Anda"
+                  placeholder={t.settings.namePlaceholder}
                 />
               </div>
               <div className="space-y-2">
@@ -242,7 +248,7 @@ export default function SettingsPage() {
               </div>
             </div>
             <Button variant="gradient" size="sm" onClick={handleSaveProfile} disabled={isSaving}>
-              <Save className="h-3.5 w-3.5" /> {isSaving ? 'Menyimpan...' : 'Simpan'}
+              <Save className="h-3.5 w-3.5" /> {isSaving ? t.settings.saving : t.settings.save}
             </Button>
           </CardContent>
         </Card>
@@ -253,30 +259,30 @@ export default function SettingsPage() {
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-base">
-              <Palette className="h-4 w-4 text-primary" /> Tampilan
+              <Palette className="h-4 w-4 text-primary" /> {t.settings.appearance}
             </CardTitle>
-            <CardDescription>Sesuaikan tampilan aplikasi</CardDescription>
+            <CardDescription>{t.settings.appearanceDescription}</CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="flex gap-3">
-              {(['dark', 'light'] as const).map((t) => (
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              {(['dark', 'light'] as const).map((mode) => (
                 <button
-                  key={t}
-                  onClick={() => setTheme(t)}
+                  key={mode}
+                  onClick={() => setTheme(mode)}
                   className={cn(
                     'flex-1 rounded-xl border-2 p-4 text-center transition-all',
-                    theme === t ? 'border-primary bg-primary/5' : 'border-border hover:border-primary/30'
+                    theme === mode ? 'border-primary bg-primary/5' : 'border-border hover:border-primary/30'
                   )}
                 >
                   <div className={cn(
                     'h-16 rounded-lg mb-2',
-                    t === 'dark' ? 'bg-[#0a0a1a]' : 'bg-[#fafafa] border border-gray-200'
+                    mode === 'dark' ? 'bg-[#0a0a1a]' : 'bg-[#fafafa] border border-gray-200'
                   )} />
                   <p className="text-sm font-medium capitalize flex items-center justify-center gap-2">
-                    {t === 'dark' ? (
-                      <><Moon className="h-4 w-4" /> Gelap</>
+                    {mode === 'dark' ? (
+                      <><Moon className="h-4 w-4" /> {t.settings.dark}</>
                     ) : (
-                      <><Sun className="h-4 w-4" /> Terang</>
+                      <><Sun className="h-4 w-4" /> {t.settings.light}</>
                     )}
                   </p>
                 </button>
@@ -291,18 +297,18 @@ export default function SettingsPage() {
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-base">
-              <Bell className="h-4 w-4 text-primary" /> Notifikasi
+              <Bell className="h-4 w-4 text-primary" /> {t.settings.notifications}
             </CardTitle>
-            <CardDescription>Atur preferensi notifikasi</CardDescription>
+            <CardDescription>{t.settings.notificationsDescription}</CardDescription>
           </CardHeader>
           <CardContent className="space-y-3">
             {[
-              { label: 'Email notifikasi', description: 'Terima update via email' },
-              { label: 'Push notifikasi', description: 'Notifikasi browser' },
-              { label: 'Laporan mingguan', description: 'Ringkasan aktivitas mingguan' },
+              { label: t.settings.emailNotification, description: t.settings.emailNotificationDescription },
+              { label: t.settings.pushNotification, description: t.settings.pushNotificationDescription },
+              { label: t.settings.weeklyReport, description: t.settings.weeklyReportDescription },
             ].map((item) => (
-              <div key={item.label} className="flex items-center justify-between rounded-lg border border-border p-3">
-                <div>
+              <div key={item.label} className="flex items-center justify-between gap-4 rounded-lg border border-border p-3">
+                <div className="min-w-0">
                   <p className="text-sm font-medium">{item.label}</p>
                   <p className="text-xs text-muted-foreground">{item.description}</p>
                 </div>
@@ -321,15 +327,15 @@ export default function SettingsPage() {
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-base">
-              <Shield className="h-4 w-4 text-primary" /> Keamanan
+              <Shield className="h-4 w-4 text-primary" /> {t.settings.security}
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="space-y-2">
-              <label className="text-sm font-medium">Ganti Password</label>
+              <label className="text-sm font-medium">{t.settings.changePassword}</label>
               <Input 
                 type="password" 
-                placeholder="Password baru" 
+                placeholder={t.settings.newPassword}
                 value={newPassword}
                 onChange={(e) => setNewPassword(e.target.value)}
               />
@@ -341,7 +347,7 @@ export default function SettingsPage() {
               disabled={isUpdatingPassword || !newPassword}
             >
               <Key className="h-3.5 w-3.5 mr-2" /> 
-              {isUpdatingPassword ? 'Memperbarui...' : 'Update Password'}
+              {isUpdatingPassword ? t.settings.updatingPassword : t.settings.updatePassword}
             </Button>
           </CardContent>
         </Card>
@@ -352,28 +358,29 @@ export default function SettingsPage() {
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-base">
-              <Globe className="h-4 w-4 text-primary" /> Bahasa
+              <Globe className="h-4 w-4 text-primary" /> {t.settings.language}
             </CardTitle>
+            <CardDescription>{t.settings.languageDescription}</CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="flex gap-3">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               {[
-                { code: 'id', label: 'Indonesia', flag: '🇮🇩' },
-                { code: 'en', label: 'English', flag: '🇺🇸' },
+                { code: 'id', label: 'Indonesia', flag: 'ID' },
+                { code: 'en', label: 'English', flag: 'US' },
               ].map((lang) => (
                 <button
                   key={lang.code}
                   onClick={() => {
                     debugAction('settings', 'language changed', { language: lang.code });
-                    setLanguage(lang.code as 'id' | 'en');
-                    toast.success(`Bahasa diubah ke ${lang.label}`);
+                    setLanguage(lang.code as Language);
+                    toast.success(`${t.settings.languageChanged} ${lang.label}`);
                   }}
                   className={cn(
-                    'flex items-center gap-2 rounded-lg border px-4 py-2.5 text-sm font-medium transition-all',
+                    'flex min-h-12 items-center gap-2 rounded-lg border px-4 py-2.5 text-sm font-medium transition-all',
                     language === lang.code ? 'border-primary bg-primary/5 text-primary' : 'border-border hover:border-primary/30'
                   )}
                 >
-                  <span className="text-lg">{lang.flag}</span>
+                  <span className="rounded bg-primary/10 px-1.5 py-0.5 text-xs font-bold">{lang.flag}</span>
                   {lang.label}
                 </button>
               ))}
@@ -407,7 +414,7 @@ export default function SettingsPage() {
                 <CheckCircle2 className="w-12 h-12 text-green-500" />
               </motion.div>
               <div className="space-y-1">
-                <h3 className="text-xl font-bold text-foreground">Berhasil Disimpan!</h3>
+                <h3 className="text-xl font-bold text-foreground">{t.settings.savedTitle}</h3>
                 <p className="text-sm text-muted-foreground">
                   {successMessage}
                 </p>
@@ -417,7 +424,7 @@ export default function SettingsPage() {
                 variant="gradient" 
                 onClick={() => setShowSuccessPopup(false)}
               >
-                Tutup
+                {t.settings.close}
               </Button>
             </motion.div>
           </motion.div>
