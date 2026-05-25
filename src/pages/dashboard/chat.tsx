@@ -50,11 +50,11 @@ const suggestedQuestions = [
 ];
 
 const renderInlineMarkdown = (text: string) => {
-  const parts = text.split(/(\*\*[^*]+\*\*)/g);
+  const parts = text.split('**');
 
   return parts.map((part, index) => {
-    if (part.startsWith('**') && part.endsWith('**')) {
-      return <strong key={index}>{part.slice(2, -2)}</strong>;
+    if (index % 2 === 1) {
+      return <strong key={index}>{part}</strong>;
     }
 
     return <span key={index}>{part}</span>;
