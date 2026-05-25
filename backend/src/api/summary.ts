@@ -3,6 +3,7 @@ import fetch from 'node-fetch';
 import { requireAuth } from '../middleware/auth';
 import { supabaseAdmin } from '../core/supabase';
 import { env } from '../config/env';
+import { logger } from '../config/logger';
 
 const router = Router();
 
@@ -13,6 +14,14 @@ async function generateWithOpenRouter(model: string, messages: { role: string; c
     throw new Error('OPENROUTER_API_KEY is not configured');
   }
 
+  const requestBody = {
+    model,
+    messages,
+    stream: true,
+    temperature: 0.2,
+    max_tokens: 900,
+  };
+
   const aiResponse = await fetch('https://openrouter.ai/api/v1/chat/completions', {
     method: 'POST',
     headers: {
@@ -21,22 +30,84 @@ async function generateWithOpenRouter(model: string, messages: { role: string; c
       'HTTP-Referer': env.OPENROUTER_REFERER || process.env.FRONTEND_URL || 'http://localhost:5173',
       'X-Title': 'DocuMind AI',
     },
-    body: JSON.stringify({
-      model,
-      messages,
-      temperature: 0.2,
-      max_tokens: 900,
-    }),
+    body: JSON.stringify(requestBody),
+    timeout: 60_000,
   });
 
   if (!aiResponse.ok) {
     const errorText = await aiResponse.text();
+    logger.error('OpenRouter summary request failed', {
+      model,
+      status: aiResponse.status,
+      statusText: aiResponse.statusText,
+      errorText,
+    });
     throw new Error(`OpenRouter failed (${aiResponse.status}): ${errorText}`);
   }
 
-  const payload = await aiResponse.json() as any;
-  const content = payload.choices?.[0]?.message?.content as string | undefined;
-  return content ? cleanAssistantText(content) : content;
+  if (!aiResponse.body) {
+    throw new Error('OpenRouter returned an empty summary stream');
+  }
+
+  return new Promise<string>((resolve, reject) => {
+    let buffer = '';
+    let content = '';
+
+    const handleDataLine = (data: string) => {
+      if (!data || data === '[DONE]') return;
+
+      const payload = JSON.parse(data);
+      if (payload.error) {
+        throw new Error(payload.error.message || JSON.stringify(payload.error));
+      }
+
+      content +=
+        payload.choices?.[0]?.delta?.content ||
+        payload.choices?.[0]?.message?.content ||
+        payload.choices?.[0]?.text ||
+        '';
+    };
+
+    aiResponse.body.on('data', (chunk: Buffer) => {
+      buffer += chunk.toString('utf8');
+      const events = buffer.split('\n\n');
+      buffer = events.pop() || '';
+
+      try {
+        for (const event of events) {
+          const dataLines = event
+            .split('\n')
+            .map((line) => line.trim())
+            .filter((line) => line.startsWith('data: '))
+            .map((line) => line.slice(6));
+
+          for (const data of dataLines) handleDataLine(data);
+        }
+      } catch (error) {
+        reject(error);
+      }
+    });
+
+    aiResponse.body.on('end', () => {
+      try {
+        if (buffer.trim().startsWith('data: ')) {
+          handleDataLine(buffer.trim().slice(6));
+        }
+      } catch (error) {
+        reject(error);
+        return;
+      }
+
+      const cleaned = cleanAssistantText(content).trim();
+      logger.info('OpenRouter summary stream completed', {
+        model,
+        characterCount: cleaned.length,
+      });
+      resolve(cleaned || '');
+    });
+
+    aiResponse.body.on('error', reject);
+  });
 }
 
 router.post('/documents/:documentId/summary', requireAuth, async (req: Request, res: Response) => {
