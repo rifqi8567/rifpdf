@@ -166,7 +166,7 @@ function LocalPdfFullPreview({ blob, name }: { blob: Blob; name: string }) {
   }, [blob]);
 
   return (
-    <div className="h-[420px] overflow-hidden rounded-xl border border-border bg-white">
+    <div className="h-[320px] overflow-hidden rounded-xl border border-border bg-white sm:h-[380px] lg:h-[460px]">
       {previewUrl ? (
         <iframe
           title={`Preview ${name}`}
@@ -256,7 +256,7 @@ function SignPlacementPreview({
   return (
     <div className="space-y-3">
       <div
-        className="relative mx-auto max-h-[520px] max-w-full cursor-none overflow-auto rounded-xl border border-border bg-white touch-none"
+        className="relative mx-auto max-h-[420px] max-w-full cursor-none overflow-auto rounded-xl border border-border bg-white touch-none lg:max-h-[560px]"
         onPointerDown={(event) => {
           const nextPlacement = getPlacementFromPointer(event);
           if (!nextPlacement) return;
@@ -1897,18 +1897,18 @@ export default function ToolPage() {
   const canSaveToDashboard = isPdfOutput || processedDocName.toLowerCase().endsWith('.doc');
 
   return (
-    <div className="p-4 lg:p-6 max-w-3xl mx-auto space-y-8 relative">
+    <div className="mx-auto w-full max-w-5xl space-y-6 p-4 sm:p-5 lg:p-6 xl:max-w-6xl">
       {/* Header */}
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
-        className="text-center space-y-4"
+        className="mx-auto max-w-3xl text-center space-y-3 sm:space-y-4"
       >
         <div className={cn('inline-flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br', tool.bg)}>
           <tool.icon className="h-8 w-8 text-white" />
         </div>
-        <h1 className="text-2xl font-bold">{tool.title}</h1>
-        <p className="text-muted-foreground">{tool.description}</p>
+        <h1 className="text-2xl font-bold sm:text-3xl">{tool.title}</h1>
+        <p className="text-sm text-muted-foreground sm:text-base">{tool.description}</p>
       </motion.div>
 
       {/* OCR Result Presentation (If OCR Mode) */}
@@ -1918,10 +1918,10 @@ export default function ToolPage() {
             initial={{ opacity: 0, scale: 0.95 }}
             animate={{ opacity: 1, scale: 1 }}
             exit={{ opacity: 0, scale: 0.95 }}
-            className="p-6 rounded-2xl bg-card border border-border space-y-4 shadow-glow"
+            className="rounded-2xl border border-border bg-card p-4 shadow-glow space-y-4 sm:p-6"
           >
-            <div className="flex items-center justify-between">
-              <div>
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div className="min-w-0">
                 <h3 className="text-lg font-bold flex items-center gap-2">
                   <Sparkles className="h-5 w-5 text-pink-400" />
                   Hasil Ekstraksi Teks AI OCR
@@ -1952,7 +1952,7 @@ export default function ToolPage() {
               </div>
             </div>
             <textarea
-              className="h-[520px] w-full resize-y rounded-xl border border-border bg-surface-2 p-5 font-mono text-sm leading-7 text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+              className="h-[360px] w-full resize-y rounded-xl border border-border bg-surface-2 p-4 font-mono text-sm leading-7 text-foreground focus:outline-none focus:ring-1 focus:ring-primary lg:h-[520px] lg:p-5"
               value={ocrText}
               onChange={(e) => setOcrText(e.target.value)}
             />
@@ -1970,7 +1970,7 @@ export default function ToolPage() {
             initial={{ opacity: 0, y: 15 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: 15 }}
-            className="p-5 rounded-2xl bg-surface-2 border border-border space-y-6 shadow-sm"
+            className="rounded-2xl border border-border bg-surface-2 p-4 shadow-sm space-y-5 sm:p-5 lg:space-y-6"
           >
             <h3 className="text-sm font-bold uppercase tracking-wider text-muted-foreground/80 flex items-center gap-2">
               <Sparkles className="h-4 w-4 text-primary" />
@@ -2060,7 +2060,7 @@ export default function ToolPage() {
                       placeholder="Contoh: 1-3,4-6" 
                       value={splitRange} 
                       onChange={(e) => setSplitRange(e.target.value)}
-                      className="max-w-sm"
+                      className="w-full sm:max-w-sm"
                     />
                   </div>
                 )}
@@ -2111,14 +2111,14 @@ export default function ToolPage() {
                       step="0.1"
                       value={targetSizeMb}
                       onChange={(e) => setTargetSizeMb(e.target.value)}
-                      className="max-w-[180px]"
+                      className="w-full sm:max-w-[180px]"
                     />
                   </div>
                 )}
 
                 <div className="space-y-3">
                   <label className="text-sm font-medium block">Kekuatan Optimasi:</label>
-                  <div className="grid grid-cols-3 gap-3">
+                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
                   {(['low', 'medium', 'high'] as const).map((level) => (
                     <button
                       key={level}
@@ -2147,7 +2147,7 @@ export default function ToolPage() {
             {toolId === 'rotate' && (
               <div className="space-y-3">
                 <label className="text-sm font-medium block">Sudut Rotasi:</label>
-                <div className="grid grid-cols-3 gap-3">
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
                   {([90, 180, 270] as const).map((value) => (
                     <button
                       key={value}
@@ -2176,7 +2176,7 @@ export default function ToolPage() {
                     placeholder="Minimal 4 karakter"
                     value={protectPassword}
                     onChange={(e) => setProtectPassword(e.target.value)}
-                    className="max-w-sm"
+                    className="w-full sm:max-w-sm"
                   />
                 </div>
                 <div className="space-y-2">
@@ -2186,7 +2186,7 @@ export default function ToolPage() {
                     placeholder="Ulangi password"
                     value={protectPasswordConfirm}
                     onChange={(e) => setProtectPasswordConfirm(e.target.value)}
-                    className="max-w-sm"
+                    className="w-full sm:max-w-sm"
                   />
                 </div>
                 <div className="p-3 bg-rose-500/10 border border-rose-500/20 text-rose-300 rounded-xl text-xs flex items-start gap-2">
@@ -2223,7 +2223,7 @@ export default function ToolPage() {
                 <div className="grid gap-4 sm:grid-cols-2">
                   <div className="space-y-2">
                     <label className="text-sm font-medium block">Warna Pena</label>
-                    <div className="flex items-center gap-3">
+                    <div className="flex flex-wrap items-center gap-3">
                       <input
                         type="color"
                         value={signatureColor}
@@ -2231,7 +2231,7 @@ export default function ToolPage() {
                         className="h-10 w-12 cursor-pointer rounded-lg border border-border bg-card p-1"
                         aria-label="Pilih warna pena"
                       />
-                      <div className="flex gap-2">
+                      <div className="flex flex-wrap gap-2">
                         {['#111111', '#2563eb', '#dc2626', '#16a34a'].map((color) => (
                           <button
                             key={color}
@@ -2283,9 +2283,9 @@ export default function ToolPage() {
                       onTouchEnd={stopDrawing}
                     />
                   </div>
-                  <div className="flex justify-between items-center">
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                     <p className="text-xs text-muted-foreground">Tarik garis dengan mouse atau sentuhan layar</p>
-                    <div className="flex gap-2">
+                    <div className="flex flex-wrap gap-2">
                       <Button variant="outline" size="sm" onClick={clearCanvas}>
                         Bersihkan
                       </Button>
@@ -2306,14 +2306,14 @@ export default function ToolPage() {
                       setSignPageNum(parseInt(e.target.value) || 1);
                       setSignaturePlacement(null);
                     }}
-                    className="max-w-[120px]"
+                    className="w-full sm:max-w-[120px]"
                   />
                 </div>
 
                 {files[0] && signatureDataUrl && (
                   <div className="space-y-3 rounded-xl border border-border bg-card p-4">
-                    <div className="flex items-center justify-between gap-3">
-                      <div>
+                    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                      <div className="min-w-0">
                         <p className="text-sm font-semibold">Atur Posisi Tanda Tangan</p>
                         <p className="text-xs text-muted-foreground">Tekan dan geser di halaman PDF untuk mengatur posisi tanda tangan.</p>
                       </div>
@@ -2370,7 +2370,7 @@ export default function ToolPage() {
         <motion.div
           initial={{ opacity: 0, y: 12 }}
           animate={{ opacity: 1, y: 0 }}
-          className="space-y-4 rounded-2xl border border-border bg-surface-2 p-5"
+          className="space-y-4 rounded-2xl border border-border bg-surface-2 p-4 sm:p-5"
         >
           <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
             <div>
@@ -2398,28 +2398,30 @@ export default function ToolPage() {
                 onDragEnd={() => setDraggedMergeIndex(null)}
                 onClick={() => setSelectedMergeIndex(index)}
                 className={cn(
-                  'flex w-full items-center gap-3 rounded-xl border bg-card p-3 text-left transition-all',
+                  'flex w-full flex-col items-stretch gap-3 rounded-xl border bg-card p-3 text-left transition-all sm:flex-row sm:items-center',
                   draggedMergeIndex === index && 'border-primary opacity-60',
                   selectedMergeIndex === index
                     ? 'border-primary ring-1 ring-primary/40'
                     : 'border-border hover:border-primary/40'
                 )}
               >
-                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary text-xs font-bold text-primary-foreground">
-                  {index + 1}
-                </div>
-
-                <LocalPdfPreview file={file} />
-
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-center gap-2">
-                    <GripVertical className="h-4 w-4 shrink-0 text-muted-foreground" />
-                    <p className="truncate text-sm font-semibold">{file.name}</p>
+                <div className="flex min-w-0 flex-1 items-center gap-3">
+                  <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary text-xs font-bold text-primary-foreground">
+                    {index + 1}
                   </div>
-                  <p className="mt-1 text-xs text-muted-foreground">{formatFileSize(file.size)}</p>
+
+                  <LocalPdfPreview file={file} />
+
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2">
+                      <GripVertical className="h-4 w-4 shrink-0 text-muted-foreground" />
+                      <p className="truncate text-sm font-semibold">{file.name}</p>
+                    </div>
+                    <p className="mt-1 text-xs text-muted-foreground">{formatFileSize(file.size)}</p>
+                  </div>
                 </div>
 
-                <div className="flex shrink-0 flex-col gap-1">
+                <div className="flex shrink-0 justify-end gap-1 sm:flex-col">
                   <Button
                     type="button"
                     variant="outline"
@@ -2469,7 +2471,7 @@ export default function ToolPage() {
                   selectedMergeIndex === index ? 'border-primary ring-1 ring-primary/40' : 'border-border'
                 )}
               >
-                <div className="flex items-center justify-between gap-3">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                   <div className="min-w-0">
                     <p className="truncate text-sm font-medium">
                       Urutan {index + 1}: {file.name}
@@ -2481,7 +2483,7 @@ export default function ToolPage() {
                     variant={selectedMergeIndex === index ? 'default' : 'outline'}
                     size="sm"
                     onClick={() => setSelectedMergeIndex(index)}
-                    className="shrink-0"
+                    className="w-full sm:w-auto sm:shrink-0"
                   >
                     File {index + 1}
                   </Button>
@@ -2503,7 +2505,7 @@ export default function ToolPage() {
           <Button 
             variant="gradient" 
             size="xl" 
-            className="group min-w-[200px]"
+            className="group w-full sm:w-auto sm:min-w-[220px]"
             onClick={handleProcess}
             disabled={isProcessing}
           >
@@ -2554,7 +2556,7 @@ export default function ToolPage() {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-background/80 backdrop-blur-sm"
+            className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 p-3 backdrop-blur-sm sm:p-4"
           >
             <motion.div
               initial={{ scale: 0.95, opacity: 0, y: 10 }}
@@ -2562,7 +2564,7 @@ export default function ToolPage() {
               exit={{ scale: 0.95, opacity: 0, y: 10 }}
               className={cn(
                 'bg-card border border-border shadow-2xl rounded-2xl w-full overflow-hidden relative',
-                splitOutputs.length > 0 ? 'max-w-5xl' : 'max-w-md'
+                splitOutputs.length > 0 ? 'max-w-[min(72rem,96vw)]' : 'max-w-lg'
               )}
             >
               <button 
@@ -2572,7 +2574,7 @@ export default function ToolPage() {
                 <X className="h-5 w-5" />
               </button>
 
-              <div className="max-h-[86vh] overflow-y-auto p-6 text-center space-y-6 pt-10">
+              <div className="max-h-[88vh] overflow-y-auto p-4 text-center space-y-5 pt-10 sm:p-6 sm:space-y-6">
                 <div className="mx-auto w-16 h-16 bg-success/15 rounded-full flex items-center justify-center text-success">
                   <CheckCircle2 className="w-10 h-10" />
                 </div>
@@ -2599,7 +2601,7 @@ export default function ToolPage() {
 
                   {splitOutputs.length > 0 ? (
                     <div className="space-y-4">
-                      <div className="flex items-center justify-between">
+                      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                         <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
                           Hasil Split
                         </p>
@@ -2613,12 +2615,12 @@ export default function ToolPage() {
                         </Button>
                       </div>
 
-                      <div className="-mx-1 overflow-x-auto overscroll-x-contain pb-3">
-                        <div className="flex gap-4 px-1">
+                      <div className="-mx-1 overflow-x-auto overscroll-x-contain pb-3 lg:overflow-visible">
+                        <div className="flex gap-4 px-1 lg:grid lg:grid-cols-2 xl:grid-cols-3">
                           {splitOutputs.map((output, index) => (
                             <div
                               key={`${output.name}-${index}`}
-                              className="w-[320px] shrink-0 space-y-3 rounded-xl border border-border bg-surface-2 p-3"
+                              className="w-[min(320px,78vw)] shrink-0 space-y-3 rounded-xl border border-border bg-surface-2 p-3 lg:w-auto"
                             >
                               <div className="flex items-center justify-between gap-3">
                                 <div className="min-w-0">
@@ -2640,7 +2642,7 @@ export default function ToolPage() {
                                   <Download className="h-4 w-4" />
                                 </Button>
                               </div>
-                              <div className="[&>div]:h-[300px]">
+                              <div className="[&>div]:h-[280px] sm:[&>div]:h-[320px]">
                                 <LocalPdfFullPreview blob={output.blob} name={output.name} />
                               </div>
                             </div>
@@ -2661,7 +2663,7 @@ export default function ToolPage() {
                         <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                           Preview Hasil Konversi
                         </p>
-                        <div className="[&>div]:h-[420px]">
+                        <div className="[&>div]:h-[320px] sm:[&>div]:h-[380px] lg:[&>div]:h-[460px]">
                           <LocalPdfFullPreview blob={processedBlob} name={processedDocName} />
                         </div>
                       </div>
@@ -2694,7 +2696,7 @@ export default function ToolPage() {
                         <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                           Preview Hasil Rotate
                         </p>
-                        <div className="[&>div]:h-[420px]">
+                        <div className="[&>div]:h-[320px] sm:[&>div]:h-[380px] lg:[&>div]:h-[460px]">
                           <LocalPdfFullPreview blob={processedBlob} name={processedDocName} />
                         </div>
                       </div>
@@ -2705,7 +2707,7 @@ export default function ToolPage() {
 
                 <div className="space-y-3 pt-2">
                   {splitOutputs.length === 0 && (
-                  <div className="flex gap-3">
+                  <div className="flex flex-col gap-3 sm:flex-row">
                     <Button 
                       className="flex-1" 
                       variant="outline" 
