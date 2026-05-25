@@ -37,7 +37,7 @@ const initialMessages: Message[] = [
     id: '1',
     role: 'assistant',
     content: 'Halo! 👋 Saya DocuMind AI. Upload dokumen PDF dan saya akan membantu Anda memahami, menganalisis, dan meringkas isinya. Apa yang bisa saya bantu hari ini?',
-    model: 'Ollama VPS',
+    model: 'OpenRouter Free',
     timestamp: new Date(),
   },
 ];
@@ -56,7 +56,7 @@ export default function ChatPage() {
   const [input, setInput] = useState('');
   const [isTyping, setIsTyping] = useState(false);
   const [isSummarizing, setIsSummarizing] = useState(false);
-  const [selectedModel, setSelectedModel] = useState<AIModel>('ollama/auto');
+  const [selectedModel, setSelectedModel] = useState<AIModel>('openrouter/free');
   const [showModelPicker, setShowModelPicker] = useState(false);
   const [activeDocument, setActiveDocument] = useState<PDFDocument | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);

@@ -86,7 +86,7 @@ CREATE TABLE IF NOT EXISTS public.document_chunks (
   id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
   document_id UUID REFERENCES public.documents(id) ON DELETE CASCADE NOT NULL,
   content TEXT NOT NULL,
-  embedding VECTOR(768) NOT NULL,
+  embedding VECTOR(768),
   metadata JSONB DEFAULT '{}',
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
@@ -102,7 +102,7 @@ CREATE TABLE IF NOT EXISTS public.chat_sessions (
   user_id UUID REFERENCES public.profiles(id) ON DELETE CASCADE NOT NULL,
   document_id UUID REFERENCES public.documents(id) ON DELETE SET NULL,
   title TEXT DEFAULT 'New Chat',
-  ai_model TEXT DEFAULT 'google/gemini-2.0-flash-exp',
+  ai_model TEXT DEFAULT 'openrouter/free',
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );

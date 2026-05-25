@@ -6,13 +6,6 @@ import { env } from '../config/env';
 
 const router = Router();
 
-const isOllamaModel = (model: string) => model === 'ollama/auto' || model.startsWith('ollama/');
-
-const resolveOllamaModel = (model: string) => {
-  if (model === 'ollama/auto') return env.OLLAMA_CHAT_MODEL;
-  return model.replace(/^ollama\//, '');
-};
-
 async function generateWithOpenRouter(model: string, messages: { role: string; content: string }[]) {
   if (!env.OPENROUTER_API_KEY) {
     throw new Error('OPENROUTER_API_KEY is not configured');
@@ -43,33 +36,9 @@ async function generateWithOpenRouter(model: string, messages: { role: string; c
   return payload.choices?.[0]?.message?.content as string | undefined;
 }
 
-async function generateWithOllama(model: string, messages: { role: string; content: string }[]) {
-  const aiResponse = await fetch(`${env.OLLAMA_HOST}/api/chat`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      model: resolveOllamaModel(model),
-      messages,
-      stream: false,
-      options: {
-        temperature: 0.2,
-        num_ctx: 8192,
-      },
-    }),
-  });
-
-  if (!aiResponse.ok) {
-    const errorText = await aiResponse.text();
-    throw new Error(`Ollama failed (${aiResponse.status}): ${errorText}`);
-  }
-
-  const payload = await aiResponse.json() as any;
-  return payload.message?.content || payload.response;
-}
-
 router.post('/documents/:documentId/summary', requireAuth, async (req: Request, res: Response) => {
   const { documentId } = req.params;
-  const { model = env.AI_PROVIDER === 'ollama' ? 'ollama/auto' : env.OPENROUTER_FALLBACK_MODEL } = req.body;
+  const model = env.OPENROUTER_FALLBACK_MODEL;
   const userId = req.user!.id;
 
   const { data: document, error: documentError } = await supabaseAdmin
@@ -124,9 +93,7 @@ ${context}`,
     },
   ];
 
-  const summary = isOllamaModel(model)
-    ? await generateWithOllama(model, messages)
-    : await generateWithOpenRouter(model, messages);
+  const summary = await generateWithOpenRouter(model, messages);
 
   if (!summary) {
     return res.status(502).json({ error: 'AI provider returned an empty summary' });
@@ -140,11 +107,11 @@ ${context}`,
 });
 
 router.post('/ocr/analyze', requireAuth, async (req: Request, res: Response) => {
-  const { text, fileName = 'hasil OCR', model = env.AI_PROVIDER === 'ollama' ? 'ollama/auto' : env.OPENROUTER_FALLBACK_MODEL } = req.body as {
+  const { text, fileName = 'hasil OCR' } = req.body as {
     text?: string;
     fileName?: string;
-    model?: string;
   };
+  const model = env.OPENROUTER_FALLBACK_MODEL;
 
   const context = typeof text === 'string' ? text.trim().slice(0, 28000) : '';
 
@@ -174,9 +141,7 @@ ${context}`,
     },
   ];
 
-  const analysis = isOllamaModel(model)
-    ? await generateWithOllama(model, messages)
-    : await generateWithOpenRouter(model, messages);
+  const analysis = await generateWithOpenRouter(model, messages);
 
   if (!analysis) {
     return res.status(502).json({ error: 'AI provider returned an empty OCR analysis' });

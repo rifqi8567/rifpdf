@@ -10,10 +10,13 @@ CREATE TABLE IF NOT EXISTS public.document_chunks (
   id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
   document_id UUID REFERENCES public.documents(id) ON DELETE CASCADE NOT NULL,
   content TEXT NOT NULL,
-  embedding VECTOR(768) NOT NULL,
+  embedding VECTOR(768),
   metadata JSONB DEFAULT '{}',
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
+
+ALTER TABLE public.document_chunks
+  ALTER COLUMN embedding DROP NOT NULL;
 
 CREATE INDEX IF NOT EXISTS idx_document_chunks_document_id
   ON public.document_chunks(document_id);
@@ -59,6 +62,7 @@ BEGIN
     1 - (document_chunks.embedding <=> query_embedding) AS similarity
   FROM public.document_chunks
   WHERE document_chunks.document_id = filter_document_id
+    AND document_chunks.embedding IS NOT NULL
     AND 1 - (document_chunks.embedding <=> query_embedding) > match_threshold
   ORDER BY document_chunks.embedding <=> query_embedding
   LIMIT match_count;

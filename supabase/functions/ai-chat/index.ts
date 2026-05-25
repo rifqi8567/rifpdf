@@ -106,7 +106,7 @@ Deno.serve(async (req) => {
         'X-Title': 'DocuMind AI',
       },
       body: JSON.stringify({
-        model: model || 'google/gemini-2.0-flash-exp',
+        model: model || 'openrouter/free',
         messages: [systemMessage, ...sanitizedMessages],
         max_tokens: 4096,
         temperature: 0.7,
@@ -131,13 +131,13 @@ Deno.serve(async (req) => {
       user_id: user.id,
       action_type: 'chat',
       credits_used: 0,
-      metadata: { model: model || 'google/gemini-2.0-flash-exp', tokens: tokensUsed, free_access: true },
+      metadata: { model: model || 'openrouter/free', tokens: tokensUsed, free_access: true },
     })
 
     return new Response(
       JSON.stringify({
         message: assistantMessage,
-        model: model || 'google/gemini-2.0-flash-exp',
+        model: model || 'openrouter/free',
         tokens_used: tokensUsed,
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }

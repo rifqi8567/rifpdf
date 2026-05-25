@@ -28,7 +28,7 @@ export async function summarizeDocument(documentId: string, model?: AIModel): Pr
   const { data: { session } } = await supabase.auth.getSession();
   debugAction('api', 'summarize request start', {
     documentId,
-    model: model || 'ollama/auto',
+    model: model || 'openrouter/free',
     hasSession: Boolean(session?.access_token),
   });
 
@@ -39,7 +39,7 @@ export async function summarizeDocument(documentId: string, model?: AIModel): Pr
       ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {})
     },
     body: JSON.stringify({
-      model: model || 'ollama/auto',
+      model: model || 'openrouter/free',
     }),
   });
 
@@ -66,7 +66,7 @@ export async function analyzeOcrText(text: string, fileName: string, model?: AIM
   debugAction('api', 'ocr analyze request start', {
     fileName,
     textLength: text.length,
-    model: model || 'ollama/auto',
+    model: model || 'openrouter/free',
     hasSession: Boolean(session?.access_token),
   });
 
@@ -79,7 +79,7 @@ export async function analyzeOcrText(text: string, fileName: string, model?: AIM
     body: JSON.stringify({
       text,
       fileName,
-      model: model || 'ollama/auto',
+      model: model || 'openrouter/free',
     }),
   });
 
@@ -113,7 +113,7 @@ export async function streamChatMessage(
   const { data: { session } } = await supabase.auth.getSession();
   debugAction('api', 'chat stream request start', {
     messageCount: request.messages.length,
-    model: request.model || 'ollama/auto',
+    model: request.model || 'openrouter/free',
     documentId: request.documentContext,
     hasSession: Boolean(session?.access_token),
   });
@@ -132,7 +132,7 @@ export async function streamChatMessage(
     body: JSON.stringify({
       documentId: request.documentContext, // Mapping to your backend
       messages: request.messages,
-      model: request.model || 'ollama/auto',
+      model: request.model || 'openrouter/free',
     }),
   });
 

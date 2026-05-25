@@ -22,7 +22,7 @@ export class PDFService {
 
   /**
    * Split text into small chunks suitable for 2GB VPS memory limit
-   * and lightweight embedding models.
+   * and small OpenRouter context windows.
    */
   static async chunkText(text: string): Promise<string[]> {
     const splitter = new RecursiveCharacterTextSplitter({

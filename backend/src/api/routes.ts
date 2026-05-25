@@ -5,7 +5,6 @@ import os from 'os';
 import path from 'path';
 import { redisConnection } from '../config/redis';
 import { DOCUMENT_PROCESSING_QUEUE } from '../queues/document';
-import { OllamaService } from '../services/ollama';
 import { requireAuth } from '../middleware/auth';
 import { supabaseAdmin } from '../core/supabase';
 import { env } from '../config/env';
@@ -21,10 +20,10 @@ export const router = Router();
 const documentQueue = new Queue(DOCUMENT_PROCESSING_QUEUE, { connection: redisConnection });
 
 router.get('/health', async (req, res) => {
-  const ollamaHealth = await OllamaService.checkHealth();
   res.json({ 
     status: 'ok',
-    ollama_connected: ollamaHealth,
+    ai_provider: 'openrouter',
+    openrouter_configured: Boolean(env.OPENROUTER_API_KEY),
     timestamp: new Date().toISOString()
   });
 });

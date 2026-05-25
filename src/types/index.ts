@@ -56,12 +56,7 @@ export interface ChatSession {
 }
 
 export type AIModel =
-  | 'ollama/auto'
-  | 'openrouter/free'
-  | 'anthropic/claude-3.5-sonnet'
-  | 'deepseek/deepseek-chat'
-  | 'openai/gpt-4o'
-  | 'qwen/qwen-2.5-72b-instruct';
+  | 'openrouter/free';
 
 export interface AIModelConfig {
   id: AIModel;

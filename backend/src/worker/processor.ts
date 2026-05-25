@@ -3,7 +3,6 @@ import { redisConnection } from '../config/redis';
 import { logger } from '../config/logger';
 import { supabase } from '../config/supabase';
 import { PDFService } from '../services/pdf';
-import { OllamaService } from '../services/ollama';
 import { DOCUMENT_PROCESSING_QUEUE } from '../queues/document';
 
 const processJob = async (job: Job) => {
@@ -80,29 +79,19 @@ const processJob = async (job: Job) => {
       .eq('document_id', documentId);
     if (deleteChunksError) throw deleteChunksError;
 
-    // 6. Sequential Embedding Generation (to save RAM)
-    // We process sequentially instead of Promise.all to prevent CPU/RAM spikes on 2 Core VPS
-    logger.info('Generating embeddings sequentially', {
+    // 6. Store chunks for OpenRouter-only RAG. Embeddings are intentionally skipped
+    // so the app no longer depends on a local model running on the VPS.
+    logger.info('Storing document chunks without local embeddings', {
       jobId: job.id,
       documentId,
       chunkCount: chunks.length,
     });
     for (let i = 0; i < chunks.length; i++) {
       const chunk = chunks[i];
-      const embedding = await OllamaService.generateEmbeddings(chunk);
-      if (i === 0) {
-        logger.info('First embedding generated', {
-          jobId: job.id,
-          documentId,
-          embeddingDimensions: embedding.length,
-          embedModel: process.env.OLLAMA_EMBED_MODEL,
-        });
-      }
       
       const { error: chunkError } = await supabase.from('document_chunks').insert({
         document_id: documentId,
         content: chunk,
-        embedding,
         metadata: {
           chunk_index: i,
           char_count: chunk.length,
@@ -116,7 +105,6 @@ const processJob = async (job: Job) => {
           documentId,
           chunkIndex: i,
           chunkLength: chunk.length,
-          embeddingDimensions: embedding.length,
           errorMessage: chunkError.message,
           errorCode: chunkError.code,
           errorDetails: chunkError.details,

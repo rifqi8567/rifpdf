@@ -40,11 +40,7 @@ const quickActions = [
 ];
 
 const aiModels = [
-  { name: 'Ollama VPS', icon: 'Local', speed: 'Private' },
-  { name: 'Gemini Flash', icon: 'Fast', speed: 'Fast' },
-  { name: 'DeepSeek', icon: 'Cost', speed: 'Fast' },
-  { name: 'GPT-4o', icon: 'AI', speed: 'Medium' },
-  { name: 'Qwen 2.5', icon: 'ID', speed: 'Medium' },
+  { name: 'OpenRouter Free', icon: 'Free', speed: 'Auto' },
 ];
 
 const formatRelativeTime = (dateValue: string) => {
