@@ -146,7 +146,11 @@ router.post('/documents/:documentId/summary', requireAuth, async (req: Request, 
     : document.content_text;
 
   if (!context || context.trim().length < 20) {
-    return res.status(422).json({ error: 'Document has no extracted text yet' });
+    return res.status(422).json({
+      error: 'Dokumen ini belum punya teks yang bisa diringkas.',
+      code: 'DOCUMENT_NEEDS_OCR',
+      details: 'PDF kemungkinan berupa scan/foto/gambar. Jalankan OCR Scanner terlebih dahulu untuk mengekstrak teks.',
+    });
   }
 
   const messages = [

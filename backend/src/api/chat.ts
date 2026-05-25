@@ -260,7 +260,11 @@ router.post('/completions', requireAuth, async (req: Request, res: Response) => 
         contentTextLength: document.content_text?.length ?? 0,
         chunkCount: contextChunks.length,
       });
-      return res.status(422).json({ error: 'Document has no extracted text yet' });
+      return res.status(422).json({
+        error: 'Dokumen ini belum punya teks yang bisa dibaca AI.',
+        code: 'DOCUMENT_NEEDS_OCR',
+        details: 'PDF kemungkinan berupa scan/foto/gambar. Jalankan OCR Scanner terlebih dahulu untuk mengekstrak teks.',
+      });
     }
 
     const providerMessages: ChatMessage[] = [

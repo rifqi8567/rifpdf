@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Send,
@@ -13,6 +13,7 @@ import {
   FileText,
   ChevronDown,
   Loader2,
+  ScanLine,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -29,6 +30,7 @@ interface Message {
   role: 'user' | 'assistant';
   content: string;
   model?: string;
+  action?: 'ocr';
   timestamp: Date;
 }
 
@@ -105,6 +107,7 @@ const renderAssistantMarkdown = (content: string) => {
 
 export default function ChatPage() {
   const [searchParams] = useSearchParams();
+  const navigate = useNavigate();
   const documentId = searchParams.get('doc');
   const [messages, setMessages] = useState<Message[]>(initialMessages);
   const [input, setInput] = useState('');
@@ -184,7 +187,24 @@ export default function ChatPage() {
       });
     } catch (error: any) {
       debugError('chat', 'summarize failed', error, { documentId, selectedModel });
-      toast.error(error.message || 'Gagal membuat ringkasan dokumen.');
+      const needsOcr = String(error?.message || '').toLowerCase().includes('ocr') ||
+        String(error?.message || '').toLowerCase().includes('teks');
+
+      if (needsOcr) {
+        setMessages((prev) => [
+          ...prev,
+          {
+            id: crypto.randomUUID(),
+            role: 'assistant',
+            content: '📷 Dokumen ini belum bisa diringkas karena tampaknya berupa scan/foto dan belum punya teks yang terbaca.\n\nJalankan OCR Scanner dulu untuk mengekstrak teksnya.',
+            model: AI_MODELS[selectedModel].name,
+            action: 'ocr',
+            timestamp: new Date(),
+          },
+        ]);
+      } else {
+        toast.error(error.message || 'Gagal membuat ringkasan dokumen.');
+      }
     } finally {
       setIsSummarizing(false);
     }
@@ -268,9 +288,19 @@ export default function ChatPage() {
     } catch (error: any) {
       console.error('Chat error:', error);
       debugError('chat', 'send failed', error, { documentId, selectedModel });
+      const needsOcr = String(error?.message || '').toLowerCase().includes('ocr') ||
+        String(error?.message || '').toLowerCase().includes('teks');
       setMessages((prev) => 
         prev.map(msg => 
-          msg.id === aiMsgId ? { ...msg, content: error.message || 'Maaf, terjadi kesalahan saat menghubungi server.' } : msg
+          msg.id === aiMsgId
+            ? {
+                ...msg,
+                content: needsOcr
+                  ? '📷 Dokumen ini sepertinya berupa scan/foto, jadi AI belum menemukan teks yang bisa dibaca.\n\nJalankan OCR Scanner dulu untuk mengekstrak teks dari gambar/PDF scan, lalu hasil OCR bisa kamu analisis dengan AI.'
+                  : error.message || 'Maaf, terjadi kesalahan saat menghubungi server.',
+                action: needsOcr ? 'ocr' : undefined,
+              }
+            : msg
         )
       );
     } finally {
@@ -389,6 +419,18 @@ export default function ChatPage() {
                 <div className="text-sm leading-relaxed">
                   {msg.role === 'assistant' ? renderAssistantMarkdown(msg.content) : msg.content}
                 </div>
+
+                {msg.role === 'assistant' && msg.action === 'ocr' && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="mt-3 gap-2"
+                    onClick={() => navigate('/dashboard/tools/ocr')}
+                  >
+                    <ScanLine className="h-4 w-4" />
+                    Buka OCR Scanner
+                  </Button>
+                )}
 
                 {msg.role === 'assistant' && (
                   <div className="flex items-center gap-2 mt-3 pt-2 border-t border-border/50">
