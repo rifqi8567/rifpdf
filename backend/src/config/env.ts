@@ -10,6 +10,7 @@ const envSchema = z.object({
   SUPABASE_SERVICE_KEY: z.string(),
   OPENROUTER_API_KEY: z.string().optional(),
   OPENROUTER_REFERER: z.string().url().optional(),
+  OPENROUTER_FALLBACK_MODEL: z.string().default('openrouter/free'),
   AI_PROVIDER: z.enum(['openrouter', 'ollama']).default('ollama'),
   OLLAMA_HOST: z.string().url().default('http://host.docker.internal:11434'),
   OLLAMA_CHAT_MODEL: z.string().default('llama3.1:8b'),

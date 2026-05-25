@@ -69,7 +69,7 @@ async function generateWithOllama(model: string, messages: { role: string; conte
 
 router.post('/documents/:documentId/summary', requireAuth, async (req: Request, res: Response) => {
   const { documentId } = req.params;
-  const { model = env.AI_PROVIDER === 'ollama' ? 'ollama/auto' : 'google/gemini-2.0-flash-exp' } = req.body;
+  const { model = env.AI_PROVIDER === 'ollama' ? 'ollama/auto' : env.OPENROUTER_FALLBACK_MODEL } = req.body;
   const userId = req.user!.id;
 
   const { data: document, error: documentError } = await supabaseAdmin
@@ -140,7 +140,7 @@ ${context}`,
 });
 
 router.post('/ocr/analyze', requireAuth, async (req: Request, res: Response) => {
-  const { text, fileName = 'hasil OCR', model = env.AI_PROVIDER === 'ollama' ? 'ollama/auto' : 'google/gemini-2.0-flash-exp' } = req.body as {
+  const { text, fileName = 'hasil OCR', model = env.AI_PROVIDER === 'ollama' ? 'ollama/auto' : env.OPENROUTER_FALLBACK_MODEL } = req.body as {
     text?: string;
     fileName?: string;
     model?: string;

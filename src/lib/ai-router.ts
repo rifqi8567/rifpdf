@@ -16,14 +16,14 @@ export const AI_MODELS: Record<AIModel, AIModelConfig> = {
     maxTokens: 4096,
     speed: 'medium',
   },
-  'google/gemini-2.0-flash-exp': {
-    id: 'google/gemini-2.0-flash-exp',
-    name: 'Gemini Flash',
-    provider: 'Google',
+  'openrouter/free': {
+    id: 'openrouter/free',
+    name: 'OpenRouter Free',
+    provider: 'OpenRouter',
     icon: '⚡',
-    description: 'Ultra-fast responses for quick tasks',
-    strengths: ['Speed', 'Efficiency', 'Multilingual'],
-    costPerMToken: 0.075,
+    description: 'Router gratis OpenRouter yang memilih model free yang tersedia',
+    strengths: ['Free', 'Fallback', 'No model maintenance'],
+    costPerMToken: 0,
     maxTokens: 8192,
     speed: 'fast',
   },
@@ -79,7 +79,7 @@ export const AI_MODELS: Record<AIModel, AIModelConfig> = {
 
 const TASK_MODEL_MAP: Record<TaskType, AIModel> = {
   chat: 'ollama/auto',
-  summarize: 'google/gemini-2.0-flash-exp',
+  summarize: 'openrouter/free',
   analyze: 'anthropic/claude-3.5-sonnet',
   translate: 'qwen/qwen-2.5-72b-instruct',
   extract: 'deepseek/deepseek-chat',
@@ -108,7 +108,7 @@ export function selectAIModel(
 
   // Speed-based routing
   if (options?.preferFast) {
-    return 'google/gemini-2.0-flash-exp';
+    return 'openrouter/free';
   }
 
   // Accuracy-based routing

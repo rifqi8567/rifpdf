@@ -206,7 +206,7 @@ const streamOllama = async (res: Response, model: string, messages: ChatMessage[
 
 router.post('/completions', requireAuth, async (req: Request, res: Response) => {
   try {
-    const { documentId, messages, model = env.AI_PROVIDER === 'ollama' ? 'ollama/auto' : 'google/gemini-2.0-flash-exp' } = req.body;
+    const { documentId, messages, model = env.AI_PROVIDER === 'ollama' ? 'ollama/auto' : env.OPENROUTER_FALLBACK_MODEL } = req.body;
     const userId = req.user!.id;
 
     logger.info('RAG chat request received', {
@@ -300,7 +300,7 @@ router.post('/completions', requireAuth, async (req: Request, res: Response) => 
         }
 
         writeSseChunk(res, 'Ollama VPS sedang tidak bisa dihubungi. Saya coba jawab lewat OpenRouter.\n\n');
-        await streamOpenRouter(res, 'google/gemini-2.0-flash-exp', providerMessages);
+        await streamOpenRouter(res, env.OPENROUTER_FALLBACK_MODEL, providerMessages);
       }
     } else {
       await streamOpenRouter(res, model, providerMessages);
