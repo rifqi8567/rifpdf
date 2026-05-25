@@ -141,11 +141,80 @@ const streamOpenRouter = async (res: Response, model: string, messages: ChatMess
     throw new Error('OpenRouter returned an empty stream');
   }
 
-  providerRes.body.on('data', (chunk: Buffer) => res.write(chunk));
-  providerRes.body.on('end', () => res.end());
-  providerRes.body.on('error', (error: Error) => {
-    console.error('[OpenRouter] Stream error:', error);
-    res.end();
+  return new Promise<void>((resolve, reject) => {
+    let buffer = '';
+    let contentChunks = 0;
+    let characterCount = 0;
+
+    const handleDataLine = (data: string) => {
+      if (!data || data === '[DONE]') return;
+
+      try {
+        const payload = JSON.parse(data);
+        if (payload.error) {
+          throw new Error(payload.error.message || JSON.stringify(payload.error));
+        }
+
+        const content =
+          payload.choices?.[0]?.delta?.content ||
+          payload.choices?.[0]?.message?.content ||
+          payload.choices?.[0]?.text ||
+          '';
+
+        if (content) {
+          contentChunks += 1;
+          characterCount += content.length;
+          writeSseChunk(res, content);
+        }
+      } catch (error) {
+        reject(error);
+      }
+    };
+
+    providerRes.body.on('data', (chunk: Buffer) => {
+      buffer += chunk.toString('utf8');
+      const events = buffer.split('\n\n');
+      buffer = events.pop() || '';
+
+      for (const event of events) {
+        const dataLines = event
+          .split('\n')
+          .map((line) => line.trim())
+          .filter((line) => line.startsWith('data: '))
+          .map((line) => line.slice(6));
+
+        for (const data of dataLines) handleDataLine(data);
+      }
+    });
+
+    providerRes.body.on('end', () => {
+      if (buffer.trim().startsWith('data: ')) {
+        handleDataLine(buffer.trim().slice(6));
+      }
+
+      logger.info('OpenRouter stream completed', {
+        model,
+        contentChunks,
+        characterCount,
+      });
+
+      if (!res.writableEnded) {
+        if (contentChunks === 0) {
+          writeSseChunk(res, 'OpenRouter merespons, tetapi tidak mengirim isi jawaban. Coba kirim ulang atau pilih model lain.');
+        }
+        writeSseDone(res);
+      }
+      resolve();
+    });
+
+    providerRes.body.on('error', (error: Error) => {
+      logger.error('OpenRouter stream error', {
+        model,
+        errorMessage: error.message,
+        errorStack: error.stack,
+      });
+      reject(error);
+    });
   });
 };
 
@@ -173,34 +242,75 @@ const streamOllama = async (res: Response, model: string, messages: ChatMessage[
     throw new Error('Ollama returned an empty stream');
   }
 
-  let buffer = '';
+  return new Promise<void>((resolve, reject) => {
+    let buffer = '';
+    let contentChunks = 0;
+    let characterCount = 0;
+    let sawDone = false;
 
-  providerRes.body.on('data', (chunk: Buffer) => {
-    buffer += chunk.toString('utf8');
-    const lines = buffer.split('\n');
-    buffer = lines.pop() || '';
+    const handleLine = (line: string) => {
+      if (!line.trim()) return;
 
-    for (const line of lines) {
-      if (!line.trim()) continue;
-
-      try {
-        const payload = JSON.parse(line);
-        const content = payload.message?.content || payload.response || '';
-        if (content) writeSseChunk(res, content);
-        if (payload.done) writeSseDone(res);
-      } catch (error) {
-        console.warn('[Ollama] Failed to parse stream line:', line);
+      const payload = JSON.parse(line);
+      if (payload.error) {
+        throw new Error(payload.error);
       }
-    }
-  });
 
-  providerRes.body.on('end', () => {
-    if (!res.writableEnded) writeSseDone(res);
-  });
+      const content = payload.message?.content || payload.response || '';
+      if (content) {
+        contentChunks += 1;
+        characterCount += content.length;
+        writeSseChunk(res, content);
+      }
+      if (payload.done) sawDone = true;
+    };
 
-  providerRes.body.on('error', (error: Error) => {
-    console.error('[Ollama] Stream error:', error);
-    if (!res.writableEnded) res.end();
+    providerRes.body.on('data', (chunk: Buffer) => {
+      buffer += chunk.toString('utf8');
+      const lines = buffer.split('\n');
+      buffer = lines.pop() || '';
+
+      for (const line of lines) {
+        try {
+          handleLine(line);
+        } catch (error) {
+          reject(error);
+        }
+      }
+    });
+
+    providerRes.body.on('end', () => {
+      try {
+        if (buffer.trim()) handleLine(buffer.trim());
+      } catch (error) {
+        reject(error);
+        return;
+      }
+
+      logger.info('Ollama stream completed', {
+        model: resolveOllamaModel(model),
+        contentChunks,
+        characterCount,
+        sawDone,
+      });
+
+      if (!res.writableEnded) {
+        if (contentChunks === 0) {
+          writeSseChunk(res, 'Ollama merespons, tetapi tidak mengirim isi jawaban. Coba kirim ulang atau gunakan OpenRouter Free.');
+        }
+        writeSseDone(res);
+      }
+      resolve();
+    });
+
+    providerRes.body.on('error', (error: Error) => {
+      logger.error('Ollama stream error', {
+        model: resolveOllamaModel(model),
+        errorMessage: error.message,
+        errorStack: error.stack,
+      });
+      reject(error);
+    });
   });
 };
 
