@@ -20,6 +20,7 @@ export class OllamaService {
           model: env.OLLAMA_EMBED_MODEL,
           prompt: text,
         }),
+        timeout: env.OLLAMA_EMBED_TIMEOUT_MS,
       });
 
       if (!response.ok) {

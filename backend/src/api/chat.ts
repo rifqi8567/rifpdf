@@ -43,6 +43,31 @@ const writeSseDone = (res: Response) => {
 
 const retrieveContext = async (documentId: string, latestUserMessage: string) => {
   try {
+    const { data: chunks, error: chunksError } = await supabaseAdmin
+      .from('document_chunks')
+      .select('content, metadata')
+      .eq('document_id', documentId)
+      .order('metadata->chunk_index', { ascending: true })
+      .limit(11);
+
+    if (chunksError) throw chunksError;
+    if (chunks && chunks.length > 0 && chunks.length <= 10) {
+      logger.info('RAG small document context loaded without vector search', {
+        documentId,
+        chunkCount: chunks.length,
+      });
+      return chunks as DocumentChunk[];
+    }
+  } catch (error) {
+    logger.warn('RAG small document context check failed, continuing to vector search', {
+      documentId,
+      errorName: (error as any)?.name,
+      errorMessage: (error as any)?.message,
+      errorCode: (error as any)?.code,
+    });
+  }
+
+  try {
     logger.info('RAG vector retrieval started', {
       documentId,
       queryLength: latestUserMessage.length,
@@ -130,7 +155,7 @@ const streamOpenRouter = async (res: Response, model: string, messages: ChatMess
       temperature: 0.2,
       max_tokens: 800,
     }),
-    timeout: 90_000,
+    timeout: 60_000,
   });
 
   if (!providerRes.ok) {
@@ -233,7 +258,7 @@ const streamOllama = async (res: Response, model: string, messages: ChatMessage[
         num_predict: 512,
       },
     }),
-    timeout: 90_000,
+    timeout: env.OLLAMA_CHAT_TIMEOUT_MS,
   });
 
   if (!providerRes.ok) {

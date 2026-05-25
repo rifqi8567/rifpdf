@@ -15,6 +15,8 @@ const envSchema = z.object({
   OLLAMA_HOST: z.string().url().default('http://host.docker.internal:11434'),
   OLLAMA_CHAT_MODEL: z.string().default('llama3.1:8b'),
   OLLAMA_EMBED_MODEL: z.string().default('nomic-embed-text'),
+  OLLAMA_CHAT_TIMEOUT_MS: z.coerce.number().int().positive().default(12_000),
+  OLLAMA_EMBED_TIMEOUT_MS: z.coerce.number().int().positive().default(12_000),
   CLEANUP_RETENTION_HOURS: z.coerce.number().int().positive().default(24),
   CLEANUP_BATCH_SIZE: z.coerce.number().int().positive().max(500).default(100),
   TMP_CLEANUP_DIR: z.string().default('/tmp/documind'),
