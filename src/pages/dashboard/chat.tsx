@@ -49,6 +49,60 @@ const suggestedQuestions = [
   'Terjemahkan bagian penting ke Bahasa Inggris',
 ];
 
+const renderInlineMarkdown = (text: string) => {
+  const parts = text.split(/(\*\*[^*]+\*\*)/g);
+
+  return parts.map((part, index) => {
+    if (part.startsWith('**') && part.endsWith('**')) {
+      return <strong key={index}>{part.slice(2, -2)}</strong>;
+    }
+
+    return <span key={index}>{part}</span>;
+  });
+};
+
+const renderAssistantMarkdown = (content: string) => {
+  const blocks = content
+    .split(/\n{2,}/)
+    .map((block) => block.trim())
+    .filter(Boolean);
+
+  return blocks.map((block, blockIndex) => {
+    const lines = block.split('\n').map((line) => line.trim()).filter(Boolean);
+    const isList = lines.every((line) => /^([-*]\s+|\d+\.\s+)/.test(line));
+
+    if (isList) {
+      const ordered = lines.every((line) => /^\d+\.\s+/.test(line));
+      const ListTag = ordered ? 'ol' : 'ul';
+
+      return (
+        <ListTag
+          key={blockIndex}
+          className={cn(
+            'my-2 space-y-1 pl-5',
+            ordered ? 'list-decimal' : 'list-disc'
+          )}
+        >
+          {lines.map((line, lineIndex) => (
+            <li key={lineIndex}>{renderInlineMarkdown(line.replace(/^([-*]\s+|\d+\.\s+)/, ''))}</li>
+          ))}
+        </ListTag>
+      );
+    }
+
+    return (
+      <p key={blockIndex} className="my-2 first:mt-0 last:mb-0">
+        {lines.map((line, lineIndex) => (
+          <span key={lineIndex}>
+            {renderInlineMarkdown(line)}
+            {lineIndex < lines.length - 1 && <br />}
+          </span>
+        ))}
+      </p>
+    );
+  });
+};
+
 export default function ChatPage() {
   const [searchParams] = useSearchParams();
   const documentId = searchParams.get('doc');
@@ -332,7 +386,9 @@ export default function ChatPage() {
                     : 'bg-surface-2 border border-border rounded-bl-md'
                 )}
               >
-                <div className="text-sm leading-relaxed whitespace-pre-wrap">{msg.content}</div>
+                <div className="text-sm leading-relaxed">
+                  {msg.role === 'assistant' ? renderAssistantMarkdown(msg.content) : msg.content}
+                </div>
 
                 {msg.role === 'assistant' && (
                   <div className="flex items-center gap-2 mt-3 pt-2 border-t border-border/50">

@@ -78,7 +78,7 @@ router.post('/documents/:documentId/summary', requireAuth, async (req: Request, 
   const messages = [
     {
       role: 'system',
-      content: 'You summarize documents accurately. Use Indonesian by default. Do not invent facts not present in the context.',
+      content: 'You summarize documents accurately. Use Indonesian by default. Do not invent facts not present in the context. Format with clean Markdown, **bold** key labels/dates/names, and use a few helpful emoji section markers like 📌, ✅, or ⚠️ without overdoing it.',
     },
     {
       role: 'user',
@@ -122,7 +122,7 @@ router.post('/ocr/analyze', requireAuth, async (req: Request, res: Response) => 
   const messages = [
     {
       role: 'system',
-      content: 'Anda analis dokumen OCR. Jawab dalam bahasa Indonesia yang jelas, rapi, dan praktis. Gunakan hanya informasi dari teks OCR. Jika ada bagian yang tidak jelas, sebutkan sebagai kemungkinan salah baca OCR.',
+      content: 'Anda analis dokumen OCR. Jawab dalam bahasa Indonesia yang jelas, rapi, dan praktis. Gunakan hanya informasi dari teks OCR. Jika ada bagian yang tidak jelas, sebutkan sebagai kemungkinan salah baca OCR. Format dengan Markdown rapi, **bold** untuk poin penting, dan emoji secukupnya.',
     },
     {
       role: 'user',
