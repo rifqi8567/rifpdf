@@ -137,6 +137,11 @@ export default function ChatPage() {
   };
 
   const handleSend = async () => {
+    if (isTyping) {
+      debugAction('chat', 'send blocked', { reason: 'request_in_progress' }, 'warn');
+      toast.warning('Tunggu jawaban AI selesai dulu.');
+      return;
+    }
     if (!input.trim()) {
       debugAction('chat', 'send blocked', { reason: 'empty_input' }, 'warn');
       return;
@@ -169,7 +174,6 @@ export default function ChatPage() {
     };
     
     setMessages((prev) => [...prev, aiMsg]);
-    setIsTyping(false);
     debugAction('chat', 'send start', {
       documentId,
       selectedModel,
@@ -178,9 +182,12 @@ export default function ChatPage() {
 
     try {
       // Map existing UI messages to the API format
-      const apiMessages = messages.map(m => ({ role: m.role, content: m.content }));
+      const apiMessages = messages
+        .filter(m => m.content.trim().length > 0)
+        .map(m => ({ role: m.role, content: m.content }));
       apiMessages.push({ role: 'user', content: userContent }); // Add the new one
 
+      let receivedContent = false;
       await streamChatMessage(
         {
           messages: apiMessages,
@@ -188,6 +195,7 @@ export default function ChatPage() {
           documentContext: documentId,
         },
         (chunk) => {
+          receivedContent = true;
           setMessages((prev) => 
             prev.map(msg => 
               msg.id === aiMsgId ? { ...msg, content: msg.content + chunk } : msg
@@ -195,6 +203,13 @@ export default function ChatPage() {
           );
         }
       );
+      if (!receivedContent) {
+        setMessages((prev) => 
+          prev.map(msg => 
+            msg.id === aiMsgId ? { ...msg, content: 'AI belum mengirim isi jawaban. Coba kirim ulang atau pilih OpenRouter Free.' } : msg
+          )
+        );
+      }
       debugAction('chat', 'send success', { documentId, selectedModel });
     } catch (error: any) {
       console.error('Chat error:', error);
@@ -204,6 +219,8 @@ export default function ChatPage() {
           msg.id === aiMsgId ? { ...msg, content: error.message || 'Maaf, terjadi kesalahan saat menghubungi server.' } : msg
         )
       );
+    } finally {
+      setIsTyping(false);
     }
   };
 
@@ -236,7 +253,7 @@ export default function ChatPage() {
             variant="outline"
             size="sm"
             onClick={handleSummarize}
-            disabled={!documentId || isSummarizing}
+            disabled={!documentId || isSummarizing || isTyping}
             className="gap-2"
           >
             {isSummarizing ? <Loader2 className="h-3 w-3 animate-spin" /> : <Sparkles className="h-3 w-3" />}
@@ -265,6 +282,7 @@ export default function ChatPage() {
                   <button
                     key={model.id}
                     onClick={() => {
+                      if (isTyping) return;
                       setSelectedModel(model.id);
                       setShowModelPicker(false);
                     }}

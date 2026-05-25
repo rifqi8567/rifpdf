@@ -128,8 +128,9 @@ const streamOpenRouter = async (res: Response, model: string, messages: ChatMess
       messages,
       stream: true,
       temperature: 0.2,
-      max_tokens: 1200,
+      max_tokens: 800,
     }),
+    timeout: 90_000,
   });
 
   if (!providerRes.ok) {
@@ -228,9 +229,11 @@ const streamOllama = async (res: Response, model: string, messages: ChatMessage[
       stream: true,
       options: {
         temperature: 0.2,
-        num_ctx: 8192,
+        num_ctx: 2048,
+        num_predict: 512,
       },
     }),
+    timeout: 90_000,
   });
 
   if (!providerRes.ok) {
