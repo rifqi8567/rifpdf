@@ -9,6 +9,59 @@ const router = Router();
 
 const cleanAssistantText = (content: string) => content.replace(/\*\*/g, '');
 
+const getHighlights = (context: string, limit = 5) => {
+  const normalized = cleanAssistantText(context)
+    .replace(/Chunk \d+:\s*/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+  const sentences = normalized
+    .split(/(?<=[.!?])\s+/)
+    .map((sentence) => sentence.trim())
+    .filter((sentence) => sentence.length > 30)
+    .slice(0, limit + 1);
+
+  if (sentences.length > 0) {
+    return sentences.slice(0, limit);
+  }
+
+  return normalized.match(/.{1,180}(\s|$)/g)?.slice(0, limit).map((item) => item.trim()).filter(Boolean) || [];
+};
+
+const buildLocalSummary = (documentName: string, context: string) => {
+  const highlights = getHighlights(context);
+
+  return [
+    `Ringkasan lokal untuk ${documentName}`,
+    '',
+    'OpenRouter Free sedang tidak mengirim ringkasan, jadi saya tampilkan ringkasan dasar dari teks dokumen yang sudah tersimpan.',
+    '',
+    'Poin utama:',
+    ...highlights.map((item) => `- ${item}`),
+    '',
+    'Saran lanjutan:',
+    '- Tanya bagian tertentu dari dokumen agar AI bisa menjawab lebih spesifik.',
+    '- Jika dokumen ini hasil scan/foto, jalankan OCR Scanner untuk hasil yang lebih akurat.',
+  ].join('\n');
+};
+
+const buildLocalOcrAnalysis = (fileName: string, context: string) => {
+  const highlights = getHighlights(context);
+
+  return [
+    `Analisis OCR lokal untuk ${fileName}`,
+    '',
+    'OpenRouter Free sedang tidak mengirim analisis, jadi saya tampilkan bacaan dasar dari teks OCR yang tersedia.',
+    '',
+    'Isi yang terbaca:',
+    ...highlights.map((item) => `- ${item}`),
+    '',
+    'Catatan:',
+    '- Kalau ada kata yang aneh, kemungkinan hasil OCR perlu dicek ulang.',
+    '- Untuk hasil lebih akurat, ulangi scan dengan gambar yang lebih terang dan tidak miring.',
+  ].join('\n');
+};
+
 async function generateWithOpenRouter(model: string, messages: { role: string; content: string }[]) {
   if (!env.OPENROUTER_API_KEY) {
     throw new Error('OPENROUTER_API_KEY is not configured');
@@ -156,7 +209,7 @@ router.post('/documents/:documentId/summary', requireAuth, async (req: Request, 
   const messages = [
     {
       role: 'system',
-      content: 'You summarize documents accurately. Use Indonesian by default. Do not invent facts not present in the context. Format neatly with short plain labels, bullets, and a few helpful emoji section markers like 📌, ✅, or ⚠️. Do not use markdown bold markers like **.',
+      content: 'You summarize documents accurately. Use Indonesian by default. Do not invent facts not present in the context. Format neatly with short plain labels and bullets. Do not use markdown bold markers like **.',
     },
     {
       role: 'user',
@@ -171,15 +224,28 @@ ${context}`,
     },
   ];
 
-  const summary = await generateWithOpenRouter(model, messages);
+  let summary = '';
+  let usedFallback = false;
+
+  try {
+    summary = await generateWithOpenRouter(model, messages);
+  } catch (error) {
+    logger.warn('OpenRouter summary failed, using local summary fallback', {
+      documentId,
+      model,
+      errorName: (error as any)?.name,
+      errorMessage: (error as any)?.message,
+    });
+  }
 
   if (!summary) {
-    return res.status(502).json({ error: 'AI provider returned an empty summary' });
+    usedFallback = true;
+    summary = buildLocalSummary(document.name, context);
   }
 
   res.json({
     documentId,
-    model,
+    model: usedFallback ? 'local-summary-fallback' : model,
     summary,
   });
 });
@@ -200,7 +266,7 @@ router.post('/ocr/analyze', requireAuth, async (req: Request, res: Response) => 
   const messages = [
     {
       role: 'system',
-      content: 'Anda analis dokumen OCR. Jawab dalam bahasa Indonesia yang jelas, rapi, dan praktis. Gunakan hanya informasi dari teks OCR. Jika ada bagian yang tidak jelas, sebutkan sebagai kemungkinan salah baca OCR. Format rapi dengan label singkat, bullet, dan emoji secukupnya. Jangan gunakan markdown bold marker seperti **.',
+      content: 'Anda analis dokumen OCR. Jawab dalam bahasa Indonesia yang jelas, rapi, dan praktis. Gunakan hanya informasi dari teks OCR. Jika ada bagian yang tidak jelas, sebutkan sebagai kemungkinan salah baca OCR. Format rapi dengan label singkat dan bullet. Jangan gunakan markdown bold marker seperti **.',
     },
     {
       role: 'user',
@@ -219,14 +285,27 @@ ${context}`,
     },
   ];
 
-  const analysis = await generateWithOpenRouter(model, messages);
+  let analysis = '';
+  let usedFallback = false;
+
+  try {
+    analysis = await generateWithOpenRouter(model, messages);
+  } catch (error) {
+    logger.warn('OpenRouter OCR analysis failed, using local analysis fallback', {
+      fileName,
+      model,
+      errorName: (error as any)?.name,
+      errorMessage: (error as any)?.message,
+    });
+  }
 
   if (!analysis) {
-    return res.status(502).json({ error: 'AI provider returned an empty OCR analysis' });
+    usedFallback = true;
+    analysis = buildLocalOcrAnalysis(fileName, context);
   }
 
   res.json({
-    model,
+    model: usedFallback ? 'local-ocr-fallback' : model,
     analysis,
   });
 });
