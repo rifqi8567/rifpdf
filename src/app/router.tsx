@@ -6,6 +6,8 @@ import { DashboardLayout } from '@/layouts/dashboard-layout';
 const LandingPage = lazy(() => import('@/pages/landing'));
 const LoginPage = lazy(() => import('@/pages/login'));
 const RegisterPage = lazy(() => import('@/pages/register'));
+const TermsPage = lazy(() => import('@/pages/terms'));
+const PrivacyPage = lazy(() => import('@/pages/privacy'));
 const DashboardPage = lazy(() => import('@/pages/dashboard/index'));
 const ChatPage = lazy(() => import('@/pages/dashboard/chat'));
 const DocumentsPage = lazy(() => import('@/pages/dashboard/documents'));
@@ -56,6 +58,22 @@ const router = createBrowserRouter([
     element: (
       <Suspense fallback={<PageLoader />}>
         <RegisterPage />
+      </Suspense>
+    ),
+  },
+  {
+    path: '/terms',
+    element: (
+      <Suspense fallback={<PageLoader />}>
+        <TermsPage />
+      </Suspense>
+    ),
+  },
+  {
+    path: '/privacy',
+    element: (
+      <Suspense fallback={<PageLoader />}>
+        <PrivacyPage />
       </Suspense>
     ),
   },
