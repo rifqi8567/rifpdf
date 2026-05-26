@@ -14,23 +14,26 @@ import {
   ChevronDown,
   Loader2,
   ScanLine,
+  Coins,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 import { AI_MODELS } from '@/lib/ai-router';
 import type { AIModel, PDFDocument } from '@/types';
-import { streamChatMessage, summarizeDocument } from '@/services/api';
+import { streamChatMessage, summarizeDocument, type ChatCompletionUsage } from '@/services/api';
 import { supabase } from '@/lib/supabase';
 import { toast } from 'sonner';
 import { debugAction, debugError } from '@/lib/debug';
 import { useTranslation } from '@/lib/i18n';
+import { useChatUsageStore } from '@/store/chat-usage-store';
 
 interface Message {
   id: string;
   role: 'user' | 'assistant';
   content: string;
   model?: string;
+  usage?: ChatCompletionUsage;
   action?: 'ocr';
   timestamp: Date;
 }
@@ -99,6 +102,15 @@ const renderAssistantMarkdown = (content: string) => {
   });
 };
 
+const getTotalTokens = (usage?: ChatCompletionUsage) => {
+  if (!usage) return 0;
+  return (
+    (usage.tokens_prompt || usage.native_tokens_prompt || 0) +
+    (usage.tokens_completion || usage.native_tokens_completion || 0) +
+    (usage.native_tokens_reasoning || 0)
+  );
+};
+
 export default function ChatPage() {
   const { t } = useTranslation();
   const [searchParams] = useSearchParams();
@@ -111,6 +123,7 @@ export default function ChatPage() {
   const [selectedModel, setSelectedModel] = useState<AIModel>('openrouter/free');
   const [showModelPicker, setShowModelPicker] = useState(false);
   const [activeDocument, setActiveDocument] = useState<PDFDocument | null>(null);
+  const addCompletionUsage = useChatUsageStore((state) => state.addCompletionUsage);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
@@ -278,6 +291,14 @@ export default function ChatPage() {
               msg.id === aiMsgId ? { ...msg, content: msg.content + chunk } : msg
             )
           );
+        },
+        (usage) => {
+          addCompletionUsage(usage);
+          setMessages((prev) =>
+            prev.map((msg) =>
+              msg.id === aiMsgId ? { ...msg, usage } : msg
+            )
+          );
         }
       );
       if (!receivedContent) {
@@ -439,6 +460,12 @@ export default function ChatPage() {
                   <div className="flex items-center gap-2 mt-3 pt-2 border-t border-border/50">
                     {msg.model && (
                       <Badge variant="secondary" className="text-[9px]">{msg.model}</Badge>
+                    )}
+                    {msg.usage && (
+                      <Badge variant="outline" className="gap-1 text-[9px]">
+                        <Coins className="h-3 w-3" />
+                        {getTotalTokens(msg.usage).toLocaleString('id-ID')} token
+                      </Badge>
                     )}
                     <div className="flex-1" />
                     <button className="text-muted-foreground hover:text-foreground transition-colors">

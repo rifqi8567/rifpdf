@@ -18,6 +18,19 @@ type DocumentChunk = {
   similarity?: number;
 };
 
+type OpenRouterGenerationUsage = {
+  id: string;
+  model?: string;
+  provider_name?: string;
+  tokens_prompt?: number;
+  tokens_completion?: number;
+  native_tokens_prompt?: number;
+  native_tokens_completion?: number;
+  native_tokens_reasoning?: number;
+  total_cost?: number;
+  usage?: number;
+};
+
 const cleanAssistantText = (content: string) => content.replace(/\*\*/g, '');
 
 const writeSseChunk = (res: Response, content: string) => {
@@ -30,9 +43,51 @@ const writeSseChunk = (res: Response, content: string) => {
   })}\n\n`);
 };
 
+const writeSseUsage = (res: Response, usage: OpenRouterGenerationUsage) => {
+  res.write(`data: ${JSON.stringify({ usage })}\n\n`);
+};
+
 const writeSseDone = (res: Response) => {
   res.write('data: [DONE]\n\n');
   res.end();
+};
+
+const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+const fetchOpenRouterGenerationUsage = async (generationId: string) => {
+  if (!env.OPENROUTER_API_KEY) return null;
+
+  for (let attempt = 0; attempt < 4; attempt += 1) {
+    if (attempt > 0) {
+      await delay(600 * attempt);
+    }
+
+    const usageRes = await fetch(`https://openrouter.ai/api/v1/generation?id=${encodeURIComponent(generationId)}`, {
+      headers: {
+        Authorization: `Bearer ${env.OPENROUTER_API_KEY}`,
+      },
+      timeout: 15_000,
+    });
+
+    if (usageRes.status === 404 || usageRes.status === 429) {
+      continue;
+    }
+
+    if (!usageRes.ok) {
+      const errorText = await usageRes.text().catch(() => '');
+      logger.warn('OpenRouter generation usage fetch failed', {
+        generationId,
+        status: usageRes.status,
+        errorText: errorText.slice(0, 500),
+      });
+      return null;
+    }
+
+    const payload = await usageRes.json() as { data?: OpenRouterGenerationUsage };
+    return payload.data || null;
+  }
+
+  return null;
 };
 
 const retrieveContext = async (documentId: string) => {
@@ -116,6 +171,7 @@ const streamOpenRouter = async (res: Response, model: string, messages: ChatMess
     let buffer = '';
     let contentChunks = 0;
     let characterCount = 0;
+    let generationId = '';
 
     const handleDataLine = (data: string) => {
       if (!data || data === '[DONE]') return;
@@ -124,6 +180,10 @@ const streamOpenRouter = async (res: Response, model: string, messages: ChatMess
         const payload = JSON.parse(data);
         if (payload.error) {
           throw new Error(payload.error.message || JSON.stringify(payload.error));
+        }
+
+        if (payload.id && !generationId) {
+          generationId = payload.id;
         }
 
         const content =
@@ -158,13 +218,14 @@ const streamOpenRouter = async (res: Response, model: string, messages: ChatMess
       }
     });
 
-    providerRes.body.on('end', () => {
+    providerRes.body.on('end', async () => {
       if (buffer.trim().startsWith('data: ')) {
         handleDataLine(buffer.trim().slice(6));
       }
 
       logger.info('OpenRouter stream completed', {
         model,
+        generationId,
         contentChunks,
         characterCount,
       });
@@ -172,6 +233,18 @@ const streamOpenRouter = async (res: Response, model: string, messages: ChatMess
       if (!res.writableEnded) {
         if (contentChunks === 0) {
           writeSseChunk(res, 'OpenRouter merespons, tetapi tidak mengirim isi jawaban. Coba kirim ulang atau pilih model lain.');
+        }
+        if (generationId) {
+          const usage = await fetchOpenRouterGenerationUsage(generationId).catch((error) => {
+            logger.warn('OpenRouter generation usage unavailable', {
+              generationId,
+              errorMessage: (error as Error).message,
+            });
+            return null;
+          });
+          if (usage) {
+            writeSseUsage(res, usage);
+          }
         }
         writeSseDone(res);
       }
@@ -188,6 +261,64 @@ const streamOpenRouter = async (res: Response, model: string, messages: ChatMess
     });
   });
 };
+
+router.get('/usage', requireAuth, async (_req: Request, res: Response) => {
+  try {
+    if (!env.OPENROUTER_API_KEY) {
+      return res.json({
+        configured: false,
+        message: 'OPENROUTER_API_KEY is not configured',
+      });
+    }
+
+    const keyRes = await fetch('https://openrouter.ai/api/v1/key', {
+      headers: {
+        Authorization: `Bearer ${env.OPENROUTER_API_KEY}`,
+      },
+      timeout: 15_000,
+    });
+
+    if (!keyRes.ok) {
+      const errorText = await keyRes.text().catch(() => '');
+      logger.warn('OpenRouter key usage fetch failed', {
+        status: keyRes.status,
+        errorText: errorText.slice(0, 500),
+      });
+      return res.status(keyRes.status).json({
+        configured: true,
+        error: 'Gagal mengambil kuota OpenRouter',
+      });
+    }
+
+    const payload = await keyRes.json() as {
+      data?: {
+        limit: number | null;
+        limit_reset: string | null;
+        limit_remaining: number | null;
+        usage: number;
+        usage_daily: number;
+        usage_weekly: number;
+        usage_monthly: number;
+        is_free_tier: boolean;
+        rate_limit?: {
+          requests?: number;
+          interval?: string;
+        };
+      };
+    };
+
+    return res.json({
+      configured: true,
+      data: payload.data || null,
+    });
+  } catch (error: any) {
+    logger.error('OpenRouter usage endpoint failed', {
+      errorMessage: error.message,
+      errorStack: error.stack,
+    });
+    return res.status(500).json({ error: 'Gagal mengambil kuota OpenRouter' });
+  }
+});
 
 router.post('/completions', requireAuth, async (req: Request, res: Response) => {
   try {

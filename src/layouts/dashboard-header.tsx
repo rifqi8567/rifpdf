@@ -1,20 +1,95 @@
 import { useEffect } from 'react';
-import { Menu, Bell, Search, LogOut } from 'lucide-react';
+import { useLocation } from 'react-router-dom';
+import { Menu, Bell, Search, LogOut, Gauge, Coins } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Badge } from '@/components/ui/badge';
 import { ThemeToggle } from '@/components/common/theme-toggle';
 import { LanguageToggle } from '@/components/common/language-toggle';
 import { useSidebarStore } from '@/store/sidebar-store';
 import { useAuthStore } from '@/store/auth-store';
+import { useChatUsageStore } from '@/store/chat-usage-store';
 import { supabase } from '@/lib/supabase';
 import { getUserProfile } from '@/services/profile';
+import { getChatUsageSnapshot } from '@/services/api';
 import { debugAction, debugError } from '@/lib/debug';
 import { useTranslation } from '@/lib/i18n';
+
+const formatNumber = (value?: number | null) =>
+  typeof value === 'number' && Number.isFinite(value) ? new Intl.NumberFormat('id-ID').format(value) : 'Tidak terbatas';
+
+const formatCurrency = (value?: number | null) => {
+  if (typeof value !== 'number' || !Number.isFinite(value)) return '$0.000000';
+  return `$${value.toFixed(6)}`;
+};
+
+function HeaderUsageSummary() {
+  const snapshot = useChatUsageStore((state) => state.snapshot);
+  const sessionTokens = useChatUsageStore((state) => state.sessionTokens());
+  const sessionCost = useChatUsageStore((state) => state.sessionCost());
+  const data = snapshot?.data;
+  const limit = data?.limit ?? null;
+  const usage = data?.usage ?? null;
+  const usagePercent = typeof limit === 'number' && limit > 0 && typeof usage === 'number'
+    ? Math.min(100, Math.max(0, (usage / limit) * 100))
+    : 0;
+
+  return (
+    <div className="hidden min-w-0 flex-1 items-center gap-3 md:flex">
+      <div className="flex min-w-0 items-center gap-3">
+        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary/10">
+          <Gauge className="h-5 w-5 text-primary" />
+        </div>
+        <div className="min-w-0">
+          <div className="flex items-center gap-2">
+            <p className="truncate text-sm font-semibold">Kuota & Token AI</p>
+            <Badge variant="secondary" className="h-5 px-2 text-[10px]">
+              OpenRouter {data?.is_free_tier ? 'Free' : 'API'}
+            </Badge>
+          </div>
+          <p className="truncate text-xs text-muted-foreground">
+            Pantau limit credit, biaya, dan token tanya jawab PDF.
+          </p>
+        </div>
+      </div>
+
+      <div className="ml-auto hidden min-w-0 items-center gap-2 xl:flex">
+        <div className="rounded-xl border border-border bg-surface-2/70 px-3 py-1.5">
+          <p className="text-[10px] text-muted-foreground">Sisa limit</p>
+          <p className="text-xs font-semibold leading-tight">{formatNumber(data?.limit_remaining)}</p>
+        </div>
+        <div className="rounded-xl border border-border bg-surface-2/70 px-3 py-1.5">
+          <p className="text-[10px] text-muted-foreground">Bulan ini</p>
+          <p className="text-xs font-semibold leading-tight">{formatCurrency(data?.usage_monthly)}</p>
+        </div>
+        <div className="rounded-xl border border-primary/30 bg-primary/10 px-3 py-1.5">
+          <p className="text-[10px] text-muted-foreground">Sesi ini</p>
+          <p className="flex items-center gap-1 text-xs font-semibold leading-tight">
+            <Coins className="h-3 w-3" />
+            {sessionTokens.toLocaleString('id-ID')} token
+          </p>
+        </div>
+        <div className="w-32">
+          <div className="h-1.5 overflow-hidden rounded-full bg-muted">
+            <div
+              className="h-full rounded-full gradient-bg transition-all"
+              style={{ width: `${usagePercent}%` }}
+            />
+          </div>
+          <p className="mt-1 text-right text-[10px] text-muted-foreground">{formatCurrency(sessionCost)}</p>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 export function DashboardHeader() {
   const { setOpen } = useSidebarStore();
   const { user, setUser } = useAuthStore();
   const { t } = useTranslation();
+  const location = useLocation();
+  const isChatPage = location.pathname === '/dashboard/chat';
+  const setUsageSnapshot = useChatUsageStore((state) => state.setSnapshot);
 
   useEffect(() => {
     const initSession = async () => {
@@ -31,6 +106,23 @@ export function DashboardHeader() {
     };
     initSession();
   }, [user, setUser]);
+
+  useEffect(() => {
+    if (!isChatPage) return;
+
+    let cancelled = false;
+    getChatUsageSnapshot()
+      .then((snapshot) => {
+        if (!cancelled) setUsageSnapshot(snapshot);
+      })
+      .catch((error) => {
+        debugError('chat', 'header usage snapshot failed', error);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [isChatPage, setUsageSnapshot]);
 
   const handleLogout = async () => {
     try {
@@ -59,7 +151,9 @@ export function DashboardHeader() {
         <Menu className="h-5 w-5" />
       </Button>
 
-      {/* Search */}
+      {isChatPage ? (
+        <HeaderUsageSummary />
+      ) : (
       <div className="relative hidden min-w-0 flex-1 max-w-md md:block">
         <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
         <Input
@@ -70,6 +164,7 @@ export function DashboardHeader() {
           ⌘K
         </kbd>
       </div>
+      )}
 
       {/* Right section */}
       <div className="ml-auto flex min-w-0 shrink-0 items-center gap-1.5 sm:gap-2">

@@ -17,6 +17,16 @@ import {
   Star,
   Check,
   ChevronRight,
+  UserRound,
+  Code2,
+  Braces,
+  Palette,
+  Database,
+  Server,
+  Lock,
+  BrainCircuit,
+  Layers3,
+  Rocket,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -433,6 +443,203 @@ function FreeAccessSection() {
   );
 }
 
+const techStack = [
+  {
+    icon: Code2,
+    title: 'React + TypeScript',
+    description: 'Frontend dibuat dengan komponen React dan TypeScript supaya tampilan lebih rapi, aman, dan mudah dikembangkan.',
+    color: 'text-sky-400',
+    bg: 'bg-sky-400/10',
+  },
+  {
+    icon: Palette,
+    title: 'Tailwind CSS',
+    description: 'Desain visual, layout responsif, dark mode, dan efek glass dibuat memakai utility class Tailwind CSS.',
+    color: 'text-fuchsia-400',
+    bg: 'bg-fuchsia-400/10',
+  },
+  {
+    icon: BrainCircuit,
+    title: 'AI + PDF Engine',
+    description: 'Fitur chat PDF, ringkasan, OCR, merge, split, dan konversi dibangun dengan alur pemrosesan dokumen modern.',
+    color: 'text-violet-400',
+    bg: 'bg-violet-400/10',
+  },
+  {
+    icon: Database,
+    title: 'Supabase',
+    description: 'Autentikasi, data pengguna, dokumen, dan penyimpanan metadata didukung oleh Supabase.',
+    color: 'text-emerald-400',
+    bg: 'bg-emerald-400/10',
+  },
+  {
+    icon: Server,
+    title: 'Backend Worker',
+    description: 'Proses berat seperti konversi dan ekstraksi dokumen dipisah ke service backend agar aplikasi tetap cepat.',
+    color: 'text-amber-400',
+    bg: 'bg-amber-400/10',
+  },
+  {
+    icon: Lock,
+    title: 'Keamanan Data',
+    description: 'Setiap alur dibuat dengan fokus pada akses akun, pengelolaan file, dan pemrosesan dokumen yang terkendali.',
+    color: 'text-cyan-400',
+    bg: 'bg-cyan-400/10',
+  },
+];
+
+const aboutHighlights = [
+  { icon: Rocket, label: 'Cepat dipakai', value: 'Tools siap untuk kerja harian' },
+  { icon: Layers3, label: 'Satu platform', value: 'AI, OCR, dan PDF tools menyatu' },
+  { icon: Braces, label: 'Modern stack', value: 'React, TypeScript, Tailwind, Supabase' },
+];
+
+function AboutOrbitalVisual() {
+  return (
+    <div className="relative mx-auto flex min-h-[420px] w-full max-w-lg items-center justify-center overflow-hidden rounded-[2rem] border border-white/10 bg-surface-2/50 p-6 shadow-glow">
+      <div className="absolute inset-0 bg-grid opacity-50" />
+      <div className="absolute left-8 top-8 h-24 w-24 rounded-full bg-info/10 blur-2xl" />
+      <div className="absolute bottom-10 right-8 h-28 w-28 rounded-full bg-accent/10 blur-2xl" />
+
+      <motion.div
+        className="relative h-72 w-72"
+        animate={{ rotateX: [58, 64, 58], rotateZ: [0, 360] }}
+        transition={{ rotateZ: { duration: 28, repeat: Infinity, ease: 'linear' }, rotateX: { duration: 6, repeat: Infinity, ease: 'easeInOut' } }}
+        style={{ transformStyle: 'preserve-3d' }}
+      >
+        {[0, 1, 2].map((ring) => (
+          <div
+            key={ring}
+            className="absolute inset-0 rounded-full border border-primary/25"
+            style={{ transform: `rotateX(${ring * 60}deg) rotateY(${ring * 25}deg)` }}
+          />
+        ))}
+
+        {[
+          { icon: Code2, label: 'TS', angle: 0, color: 'from-sky-400 to-blue-500' },
+          { icon: BrainCircuit, label: 'AI', angle: 72, color: 'from-violet-400 to-fuchsia-500' },
+          { icon: Database, label: 'DB', angle: 144, color: 'from-emerald-400 to-teal-500' },
+          { icon: Server, label: 'API', angle: 216, color: 'from-amber-400 to-orange-500' },
+          { icon: Lock, label: 'SEC', angle: 288, color: 'from-cyan-400 to-indigo-500' },
+        ].map((item) => {
+          const Icon = item.icon;
+          return (
+            <div
+              key={item.label}
+              className="absolute left-1/2 top-1/2 h-16 w-16"
+              style={{ transform: `translate(-50%, -50%) rotate(${item.angle}deg) translateX(128px) rotate(-${item.angle}deg)` }}
+            >
+              <motion.div
+                className="flex h-16 w-16 items-center justify-center rounded-2xl border border-white/15 bg-surface-3 shadow-card"
+                animate={{ y: [0, -10, 0] }}
+                transition={{ duration: 3.4, repeat: Infinity, ease: 'easeInOut', delay: item.angle / 180 }}
+              >
+                <div className={cn('flex h-11 w-11 items-center justify-center rounded-xl bg-gradient-to-br', item.color)}>
+                  <Icon className="h-5 w-5 text-white" />
+                </div>
+              </motion.div>
+            </div>
+          );
+        })}
+
+        <div className="absolute left-1/2 top-1/2 h-32 w-32 -translate-x-1/2 -translate-y-1/2">
+          <motion.div
+            className="flex h-32 w-32 flex-col items-center justify-center rounded-[1.5rem] border border-primary/30 bg-surface-1/95 shadow-glow-lg"
+            animate={{ rotateY: [0, 360] }}
+            transition={{ duration: 12, repeat: Infinity, ease: 'linear' }}
+            style={{ transformStyle: 'preserve-3d' }}
+          >
+            <FileText className="h-10 w-10 text-primary" />
+            <span className="mt-2 text-sm font-semibold">DocuMind</span>
+            <span className="text-xs text-muted-foreground">AI PDF</span>
+          </motion.div>
+        </div>
+      </motion.div>
+    </div>
+  );
+}
+
+function AboutSection() {
+  return (
+    <section id="tentang" className="relative overflow-hidden bg-surface-1 py-24">
+      <div className="absolute inset-0 bg-dots opacity-20" />
+      <div className="relative mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+        <div className="grid items-center gap-12 lg:grid-cols-[1.05fr_0.95fr]">
+          <motion.div
+            initial="initial"
+            whileInView="animate"
+            viewport={{ once: true, margin: '-80px' }}
+            variants={staggerContainer}
+          >
+            <motion.div variants={fadeUp}>
+              <Badge variant="outline" className="mb-4 gap-2">
+                <UserRound className="h-3.5 w-3.5 text-primary" />
+                Tentang Pembuat
+              </Badge>
+            </motion.div>
+            <motion.h2 variants={fadeUp} className="text-3xl font-bold leading-tight sm:text-4xl lg:text-5xl">
+              Dibuat oleh <span className="gradient-text">Muhammad Rifqi thufail fahmi</span> untuk membuat PDF terasa lebih pintar.
+            </motion.h2>
+            <motion.p variants={fadeUp} className="mt-5 max-w-2xl text-base leading-relaxed text-muted-foreground sm:text-lg">
+              DocuMind adalah aplikasi web untuk membantu pengguna mengelola dokumen PDF dengan cepat:
+              mulai dari chat dengan isi dokumen, membuat ringkasan, OCR, menggabungkan file, memisahkan halaman,
+              kompresi, tanda tangan, sampai konversi dokumen.
+            </motion.p>
+            <motion.p variants={fadeUp} className="mt-4 max-w-2xl text-base leading-relaxed text-muted-foreground">
+              Bagian tampilannya dibuat dengan bahasa pemrograman TypeScript di atas React. Styling memakai Tailwind CSS,
+              animasi memakai Framer Motion, sedangkan data dan autentikasi didukung Supabase serta service backend untuk
+              pemrosesan PDF.
+            </motion.p>
+
+            <motion.div variants={fadeUp} className="mt-8 grid gap-4 sm:grid-cols-3">
+              {aboutHighlights.map((item) => {
+                const Icon = item.icon;
+                return (
+                  <div key={item.label} className="rounded-2xl border border-border bg-card/50 p-4">
+                    <Icon className="h-5 w-5 text-primary" />
+                    <div className="mt-3 text-sm font-semibold">{item.label}</div>
+                    <p className="mt-1 text-xs leading-relaxed text-muted-foreground">{item.value}</p>
+                  </div>
+                );
+              })}
+            </motion.div>
+          </motion.div>
+
+          <motion.div
+            initial={{ opacity: 0, scale: 0.92, y: 30 }}
+            whileInView={{ opacity: 1, scale: 1, y: 0 }}
+            viewport={{ once: true, margin: '-80px' }}
+            transition={{ duration: 0.7, ease: [0.22, 1, 0.36, 1] }}
+          >
+            <AboutOrbitalVisual />
+          </motion.div>
+        </div>
+
+        <motion.div
+          initial="initial"
+          whileInView="animate"
+          viewport={{ once: true, margin: '-80px' }}
+          variants={staggerContainer}
+          className="mt-14 grid gap-5 sm:grid-cols-2 lg:grid-cols-3"
+        >
+          {techStack.map((tech) => {
+            const Icon = tech.icon;
+            return (
+              <motion.div key={tech.title} variants={fadeUp} className="glass-card p-6">
+                <div className={cn('mb-4 flex h-12 w-12 items-center justify-center rounded-2xl', tech.bg)}>
+                  <Icon className={cn('h-6 w-6', tech.color)} />
+                </div>
+                <h3 className="text-base font-semibold">{tech.title}</h3>
+                <p className="mt-2 text-sm leading-relaxed text-muted-foreground">{tech.description}</p>
+              </motion.div>
+            );
+          })}
+        </motion.div>
+      </div>
+    </section>
+  );
+}
+
 // ============================================
 // Footer
 // ============================================
@@ -459,7 +666,7 @@ function Footer() {
           <div>
             <h4 className="font-semibold mb-3">Perusahaan</h4>
             <ul className="space-y-2 text-sm text-muted-foreground">
-              <li><a href="#" className="hover:text-foreground transition-colors">Tentang</a></li>
+              <li><a href="#tentang" className="hover:text-foreground transition-colors">Tentang</a></li>
               <li><a href="#" className="hover:text-foreground transition-colors">Blog</a></li>
               <li><a href="#" className="hover:text-foreground transition-colors">Karir</a></li>
               <li><a href="#" className="hover:text-foreground transition-colors">Kontak</a></li>
@@ -498,6 +705,7 @@ export default function LandingPage() {
       <FeaturesSection />
       <ToolsSection />
       <FreeAccessSection />
+      <AboutSection />
       <Footer />
     </div>
   );

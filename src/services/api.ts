@@ -8,6 +8,38 @@ interface ChatRequest {
   documentContext?: string;
 }
 
+export interface ChatCompletionUsage {
+  id: string;
+  model?: string;
+  provider_name?: string;
+  tokens_prompt?: number;
+  tokens_completion?: number;
+  native_tokens_prompt?: number;
+  native_tokens_completion?: number;
+  native_tokens_reasoning?: number;
+  total_cost?: number;
+  usage?: number;
+}
+
+export interface ChatUsageSnapshot {
+  configured: boolean;
+  data: {
+    limit: number | null;
+    limit_reset: string | null;
+    limit_remaining: number | null;
+    usage: number;
+    usage_daily: number;
+    usage_weekly: number;
+    usage_monthly: number;
+    is_free_tier: boolean;
+    rate_limit?: {
+      requests?: number;
+      interval?: string;
+    };
+  } | null;
+  message?: string;
+}
+
 const apiBaseUrl = (import.meta.env.VITE_API_URL || '/api').replace(/\/$/, '');
 
 export function buildApiUrl(path: string) {
@@ -101,6 +133,36 @@ export async function analyzeOcrText(text: string, fileName: string, model?: AIM
   return payload.analysis;
 }
 
+export async function getChatUsageSnapshot(): Promise<ChatUsageSnapshot> {
+  const { data: { session } } = await supabase.auth.getSession();
+  debugAction('api', 'chat usage snapshot start', {
+    hasSession: Boolean(session?.access_token),
+  });
+
+  const response = await fetch(buildApiUrl('/api/v1/chat/usage'), {
+    headers: {
+      ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {}),
+    },
+  });
+
+  if (!response.ok) {
+    const payload = await response.json().catch(() => null);
+    debugAction('api', 'chat usage snapshot failed', {
+      status: response.status,
+      payload,
+    }, 'error');
+    throw new Error(payload?.error || `Gagal mengambil kuota AI (${response.status})`);
+  }
+
+  const payload = await response.json();
+  debugAction('api', 'chat usage snapshot success', {
+    configured: payload.configured,
+    usage: payload.data?.usage,
+    limit: payload.data?.limit,
+  });
+  return payload;
+}
+
 
 
 /**
@@ -108,7 +170,8 @@ export async function analyzeOcrText(text: string, fileName: string, model?: AIM
  */
 export async function streamChatMessage(
   request: ChatRequest,
-  onChunk: (chunk: string) => void
+  onChunk: (chunk: string) => void,
+  onUsage?: (usage: ChatCompletionUsage) => void
 ): Promise<void> {
   const { data: { session } } = await supabase.auth.getSession();
   debugAction('api', 'chat stream request start', {
@@ -177,6 +240,10 @@ export async function streamChatMessage(
         
         try {
           const parsed = JSON.parse(data);
+          if (parsed.usage) {
+            onUsage?.(parsed.usage);
+            continue;
+          }
           const content = parsed.choices?.[0]?.delta?.content || '';
           if (content) {
             chunkCount += 1;
@@ -195,6 +262,10 @@ export async function streamChatMessage(
     if (data !== '[DONE]') {
       try {
         const parsed = JSON.parse(data);
+        if (parsed.usage) {
+          onUsage?.(parsed.usage);
+          return;
+        }
         const content = parsed.choices?.[0]?.delta?.content || '';
         if (content) {
           chunkCount += 1;
